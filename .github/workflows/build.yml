@@ -1,0 +1,48 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  compile:
+    name: Type-check Swift + shell
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Type-check Swift sources
+        run: |
+          SDK="$(xcrun --sdk macosx --show-sdk-path)"
+          swiftc -target arm64-apple-macos13.0 -sdk "$SDK" -o /tmp/DSHDesktop-check \
+            src/AppDelegate.swift src/MainWindowController.swift src/EditingWebView.swift \
+            src/ServerManager.swift src/UpdateManager.swift src/Platform.swift \
+            -framework Cocoa -framework WebKit
+          swiftc -target arm64-apple-macos13.0 -sdk "$SDK" -o /tmp/dsh-updater-check \
+            src/UpdaterHelper.swift
+
+      - name: Shell syntax check
+        run: bash -n build.sh make-dmg.sh install.sh publish-update.sh
+
+  build:
+    name: Build .app + DMG
+    runs-on: macos-latest
+    needs: compile
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build self-contained app
+        run: ./build.sh
+
+      - name: Package DMG
+        run: ./make-dmg.sh
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-desktop-dmg
+          path: dist/*.dmg
+          if-no-files-found: error
