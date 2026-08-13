@@ -1,0 +1,75 @@
+#!/bin/bash
+# Spec-First enforcement hook (pre-commit).
+#
+# Blocks commits that change code without an accompanying change under
+# docs/specs/. This is the mechanical backstop for the repo's "spec-first"
+# convention (see AGENTS.md): code changes must update the spec FIRST.
+#
+# Install:  ./scripts/install-hooks.sh
+# The ByteDance bytesec security hook (global core.hooksPath) already chains to
+# this repo's .git/hooks/pre-commit, so both run — nothing is overwritten.
+#
+# Emergency escape hatches (use sparingly; catch up on the spec afterwards):
+#   * commit message contains [spec-skip]
+#   * DSH_SPEC_SKIP=1 git commit ...
+#   * git commit --no-verify
+set -euo pipefail
+
+REPO="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+[ -n "$REPO" ] || exit 0
+
+# Paths that are "code" and therefore require a spec update when changed.
+CODE_PATHS=( '^src/' '^assets/' '^scripts/' '^\.github/' )
+
+changed_code=0
+code_files=()
+while IFS= read -r f; do
+  for pat in "${CODE_PATHS[@]}"; do
+    if [[ "$f" =~ $pat ]]; then
+      changed_code=1
+      code_files+=("$f")
+      break
+    fi
+  done
+done < <(git -C "$REPO" diff --cached --name-only --diff-filter=ACMR)
+
+# No code changed → nothing to enforce.
+[ "$changed_code" -eq 0 ] && exit 0
+
+# Spec change present → pass.
+if git -C "$REPO" diff --cached --name-only --diff-filter=ACMR | grep -q '^docs/specs/'; then
+  echo "[spec-first] ✓ code change accompanied by spec change." >&2
+  exit 0
+fi
+
+# Overrides.
+if [[ "${DSH_SPEC_SKIP:-}" == "1" ]]; then
+  echo "[spec-first] DSH_SPEC_SKIP=1 — skipping spec check." >&2
+  exit 0
+fi
+if [ -f "$REPO/.git/COMMIT_EDITMSG" ] && grep -q '\[spec-skip\]' "$REPO/.git/COMMIT_EDITMSG" 2>/dev/null; then
+  echo "[spec-first] Commit message contains [spec-skip] — skipping spec check." >&2
+  exit 0
+fi
+
+cat >&2 <<'EOF'
+⛔ [spec-first] 本次提交修改了代码，但没有同步更新规格（docs/specs/）。
+
+    项目强约定（AGENTS.md）：所有代码修改必须先更新 spec，再修改代码。
+
+    修改的代码文件：
+EOF
+printf '      - %s\n' "${code_files[@]}" >&2
+cat >&2 <<'EOF'
+
+    做法：
+      1. 先修改 docs/specs/NNNN-*.md —— 新增/修订对应需求（FR/NFR、章节、
+         流程图），递增「文档版本（Document version）」并更新日期；
+      2. 把 spec 与代码放在同一次提交里。
+
+    紧急绕过（不推荐，事后必须补 spec）：
+      * 提交信息包含 [spec-skip]
+      * DSH_SPEC_SKIP=1 git commit ...
+      * git commit --no-verify
+EOF
+exit 1

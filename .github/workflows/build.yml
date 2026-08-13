@@ -1,0 +1,64 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  compile:
+    name: Type-check Swift + shell
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Type-check Swift sources
+        run: |
+          SDK="$(xcrun --sdk macosx --show-sdk-path)"
+          swiftc -target arm64-apple-macos13.0 -sdk "$SDK" -o /tmp/DSHDesktop-check \
+            src/AppDelegate.swift src/MainWindowController.swift src/EditingWebView.swift \
+            src/ServerManager.swift src/UpdateManager.swift src/UpdatePolicy.swift \
+            src/Platform.swift \
+            -framework Cocoa -framework WebKit
+          swiftc -target arm64-apple-macos13.0 -sdk "$SDK" -o /tmp/dsh-updater-check \
+            src/UpdaterHelper.swift
+
+      - name: Shell syntax check
+        run: bash -n scripts/build.sh scripts/make-dmg.sh scripts/install.sh scripts/publish-update.sh scripts/dev-update.sh scripts/run-tests.sh
+
+  test:
+    name: Unit tests (UpdatePolicy)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run unit tests
+        run: ./scripts/run-tests.sh
+
+  build:
+    name: Build .app + DMG
+    runs-on: macos-latest
+    needs: [compile, test]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build + package + manifest (full)
+        run: ./scripts/publish-update.sh
+
+      - name: Build + package + manifest (light)
+        run: DSH_LIGHT=1 ./scripts/publish-update.sh
+
+      - name: Smoke-check artifacts (full)
+        run: ./scripts/smoke-check.sh full
+
+      - name: Smoke-check artifacts (light)
+        run: ./scripts/smoke-check.sh light
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsh-desktop-dmg
+          path: dist/*.dmg
+          if-no-files-found: error

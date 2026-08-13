@@ -1,0 +1,8 @@
+# Desktop-owned patch layer for this profile, applied after every bundle layer:
+# a top-level YAML array of loader patch entries (id-targeted config overrides,
+# disables, and insert lists; `!!js` expressions allowed).
+#
+# This is where the desktop app iterates independently of the upstream `web`
+# profile and the @deepseek-ai/dsh-web-app plugin — edit here for
+# desktop-specific plugin config without touching the upstream profile.
+[]
