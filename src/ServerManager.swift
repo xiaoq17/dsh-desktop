@@ -34,6 +34,48 @@ final class ServerManager {
 
     // MARK: - Runtime resolution
 
+    /// Probe the user's login-shell PATH so the embedded dsh backend (and the
+    /// bash tools it spawns) can find brew / user-level CLIs such as `gh`.
+    /// macOS GUI apps inherit a minimal PATH from launchd
+    /// (`/usr/bin:/bin:/usr/sbin:/sbin`); we ask the login shell instead so we
+    /// never hard-code machine paths (spec S-0002 FR-1/2).
+    ///
+    /// Returns the first non-empty `$PATH` from `/bin/zsh -l` or
+    /// `/bin/bash -l`, or nil when both fail or time out (~5s) so startup is
+    /// never blocked by a slow user shell config (spec S-0002 NFR-1).
+    static func loginShellPath() -> String? {
+        for shell in ["/bin/zsh", "/bin/bash"] {
+            guard FileManager.default.isExecutableFile(atPath: shell) else { continue }
+            if let path = Self.shellPath(from: shell) { return path }
+        }
+        return nil
+    }
+
+    /// Run a login shell once and return its `$PATH`, with a timeout guard so
+    /// a slow/broken login script never blocks startup (spec S-0002 NFR-1).
+    private static func shellPath(from shell: String) -> String? {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: shell)
+        proc.arguments = ["-l", "-c", "echo \"$PATH\""]
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = Pipe()   // swallow errors from login scripts
+        do {
+            try proc.run()
+        } catch {
+            return nil
+        }
+        // Timeout guard: terminate a stuck login shell after ~5s.
+        DispatchQueue.global().asyncAfter(deadline: .now() + 5) { [weak proc] in
+            if proc?.isRunning == true { proc?.terminate() }
+        }
+        proc.waitUntilExit()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let out = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (out?.isEmpty == false) ? out : nil
+    }
+
     /// Absolute path to the bundled Node binary inside this .app (full build).
     static var bundledNodePath: String? {
         guard let res = Bundle.main.resourceURL?.path else { return nil }
@@ -199,8 +241,12 @@ final class ServerManager {
         if env["DSH_HOME"] == nil {
             env["DSH_HOME"] = ServerManager.resolvedHomePath()
         }
-        // Keep the npx cache resolvable for transitive tools (e.g. cli deps).
-        if env["PATH"] == nil {
+        // Prefer the user's login-shell PATH so the embedded backend (and the
+        // bash tools it spawns) can reach brew / user-level CLIs such as `gh`
+        // — a GUI app's launchd PATH is just the system dirs (spec S-0002).
+        if let loginPath = ServerManager.loginShellPath() {
+            env["PATH"] = loginPath
+        } else if env["PATH"] == nil {
             env["PATH"] = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         }
         proc.environment = env
