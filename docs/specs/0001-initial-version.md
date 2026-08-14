@@ -4,7 +4,7 @@
 |---|---|
 | **状态（Status）** | 已实现（Implemented） |
 | **规格 ID（Spec ID）** | S-0001 |
-| **文档版本（Document version）** | 1.25 |
+| **文档版本（Document version）** | 1.26 |
 | **日期（Date）** | 2026-08-14 |
 | **负责人（Owner）** | Qin Xiao |
 | **取代（Supersedes）** | — |
@@ -135,6 +135,11 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
   `Contents/Resources/desktop-profile/` 预置该 profile（`package.json`、
   `cordis.yml`、`cordis.patch.yml`、`pnpm-workspace.yaml`），且不得（MUST NOT）
   覆盖已存在的用户层。
+- **FR-1.6** 启动内嵌后端前，应用必须（MUST）以用户**登录 shell**（依次尝试
+  `/bin/zsh -l`、`/bin/bash -l`）探测真实 `PATH` 并注入守护进程环境，使由守护进程
+  派生的 bash 工具子进程能直接调用 brew / 用户级命令（如 `gh`）——macOS GUI app 经
+  launchd 启动时 `PATH` 只有系统目录（`/usr/bin:/bin:/usr/sbin:/sbin`），不得
+  （MUST NOT）硬编码机器路径；探测失败时回退为继承的 `PATH`（不得阻止服务器启动）。
 
 ### 5.2 GUI 加载
 
@@ -245,6 +250,10 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
 - **NFR-9** *品牌图标*：应用图标是**静态资产** `assets/AppIcon.icns`（深色
   圆角 tile 内嵌青色鲸鱼 logo，一次性制作后固化），构建时直接复制、**不再生成**
   （MUST NOT）；后续更换图标直接替换该静态资产即可。
+- **NFR-10** *PATH 探测健壮性*：登录 shell `PATH` 探测每次尝试应（SHOULD）在
+  约 3s 内完成（两个 shell 最坏合计约 6s），避免长时间阻塞启动；探测结果必须
+  （MUST）只取唯一标记行（`DSH_PATH:`）的 payload，登录脚本（`.zprofile` /
+  `.zshrc`）向 stdout 打印的 motd/banner/回显不得（MUST NOT）污染结果。
 
 ## 7. 更新管线
 
