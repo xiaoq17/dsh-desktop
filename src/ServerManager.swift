@@ -38,12 +38,12 @@ final class ServerManager {
     /// bash tools it spawns) can find brew / user-level CLIs such as `gh`.
     /// macOS GUI apps inherit a minimal PATH from launchd
     /// (`/usr/bin:/bin:/usr/sbin:/sbin`); we ask the login shell instead so we
-    /// never hard-code machine paths (spec S-0002 FR-1/2).
+    /// never hard-code machine paths (spec S-0001 FR-1.6).
     ///
     /// Returns the first non-empty `$PATH` from `/bin/zsh -l` or
     /// `/bin/bash -l`, or nil when both fail or time out. Per-shell timeout is
     /// ~3s, worst case ~6s total, so startup is never blocked for long by a
-    /// slow user shell config (spec S-0002 NFR-1).
+    /// slow user shell config (spec S-0001 NFR-10).
     static func loginShellPath() -> String? {
         for shell in ["/bin/zsh", "/bin/bash"] {
             guard FileManager.default.isExecutableFile(atPath: shell) else { continue }
@@ -53,12 +53,12 @@ final class ServerManager {
     }
 
     /// Run a login shell once and return its `$PATH`, with a timeout guard so
-    /// a slow/broken login script never blocks startup (spec S-0002 NFR-1).
+    /// a slow/broken login script never blocks startup (spec S-0001 NFR-10).
     ///
     /// The shell prints PATH inside a unique marker line
     /// (`DSH_PATH:<path>`), and we extract only the marker's payload so stray
     /// stdout from login scripts (motd / banners / tool echoes) can never
-    /// pollute the returned PATH (spec S-0002 NFR-1, review suggestion).
+    /// pollute the returned PATH (spec S-0001 NFR-10, review suggestion).
     private static let pathMarker = "DSH_PATH"
     private static func shellPath(from shell: String) -> String? {
         let proc = Process()
@@ -255,7 +255,7 @@ final class ServerManager {
         }
         // Prefer the user's login-shell PATH so the embedded backend (and the
         // bash tools it spawns) can reach brew / user-level CLIs such as `gh`
-        // — a GUI app's launchd PATH is just the system dirs (spec S-0002).
+        // — a GUI app's launchd PATH is just the system dirs (spec S-0001 FR-1.6).
         if let loginPath = ServerManager.loginShellPath() {
             env["PATH"] = loginPath
         } else if env["PATH"] == nil {
