@@ -4,7 +4,7 @@
 |---|---|
 | **状态（Status）** | 已实现（Implemented） |
 | **规格 ID（Spec ID）** | S-0001 |
-| **文档版本（Document version）** | 1.20 |
+| **文档版本（Document version）** | 1.23 |
 | **日期（Date）** | 2026-08-14 |
 | **负责人（Owner）** | Qin Xiao |
 | **取代（Supersedes）** | — |
@@ -215,6 +215,18 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
 - **FR-9.9** 清单 URL 与 `dmgUrl` 必须（MUST）支持 `file://`（本地开发）：本地
   构建经 `dev-update.sh` 生成清单与 DMG 后，走与 GitHub 发布完全相同的"后台暂存
   → 提醒 → 点按更新"流程。
+- **FR-9.10** 更新相关的**用户可见文案**必须（MUST）同时展示 `version` 与
+  `build`（git 短 revision），以便用户在"同版本串、不同 build"的次级比较场景
+  （§7.2）中直观确认目标构建：手动检查的"有可用更新"提示、安装确认框、以及
+  "重启并安装 dsh-desktop …"菜单项均需包含 `build`（如 `v0.1.0.0 (rev:39494ea)`）；
+  `build` 缺失时沿用旧文案（不显示 rev 段）。"已是最新"提示同时展示当前
+  `version` 与当前 `build`。
+- **FR-9.11** 本地开发更新安装成功后，应用必须（MUST）自动清除 `file://` 清单
+  覆盖、回归默认（GitHub）清单 URL：`dsh-updater` 换包成功后、relaunch 前，检查
+  目标 bundle 的 `DSHUpdateManifestURL` 覆盖，若其为 `file://`（本地 dev 清单，
+  见 §8.3 / FR-9.9）则必须（MUST）删除该覆盖键，使应用下次检查回归
+  Info.plist 嵌入的默认清单 URL（§7.4）；非 `file://` 的用户自定义覆盖（如指向
+  内网/测试服务器）不得（MUST NOT）被清除。
 
 ## 6. 非功能需求
 
@@ -278,6 +290,16 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
 - 版本串相同（`DSH_DESKTOP_REV` 相同）时，以 `build`（git 短 revision，如
   `458b452`）作次级比较：**只要与当前 build 不同即视为新 build**；`build` 缺失
   视为与当前相同（非更新）。
+- **次级比较贯穿整个管线**：`isNewer`、`restorePendingIfAny`（重启后恢复已暂存
+  更新）、"跳过此版本"以及"已暂存"判定都**必须（MUST）**把 `build` 纳入"是否为
+  同一更新"的身份比较——同版本串但不同 `build` 视为**不同更新**。具体而言：
+  - 已暂存更新持久化时必须（MUST）同时保存其 `build`（`DSHPendingUpdateBuild`），
+    重启恢复时以 `version`+`build` 与当前运行 build 比较：版本更大，或版本相同但
+    build 不同，均应恢复提醒；
+  - "跳过此版本"以 `version`+`build` 为键，跳过某一 build 不得（MUST NOT）屏蔽
+    同版本串的后续新 build；
+  - "已暂存 & 待应用同版本"只有当 `build` 也一致时才视为已处理，不同 build 的新
+    更新必须（MUST）照常进入下载/暂存流程。
 - 由此，dsh 升级（前三位变化）即使桌面修订归零，也必然判定为"有新版本"；
   桌面独占修复（第四位递增）在同一 dsh 版本下也能正确判定。
 
@@ -288,16 +310,18 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
      → 平台不匹配？→（静默：不动作；手动："当前平台无更新"）
      → app 不匹配（清单 `app` ≠ 本变体）？→（静默：不动作；手动："该更新不适用于本应用"）
      → 无新版？否 →（静默：不动作；手动："已是最新"）
-     → 是 → 已跳过此版本？→ 不动作
+     → 是 → 已跳过此版本+build？→ 不动作
 下载   → caches/com.deepseek.dsh.desktop/dsh-desktop-<v>.dmg（后台；`file://` 为复制）
 校验   → SHA-256（CryptoKit）对照清单
-就绪   → 设置 pendingUpdate 并持久化（UserDefaults）
-       → 菜单"重启并安装 dsh-desktop v…"亮起 + Dock 图标跳动一次（不重启）
+就绪   → 设置 pendingUpdate 并持久化（UserDefaults，含 version+build）
+       → 菜单"重启并安装 dsh-desktop v… (rev:…)"亮起 + Dock 图标跳动一次（不重启）
 应用   → 用户点按"重启并安装…"→ 确认框
 安装   → 拉起 Contents/Helpers/dsh-updater --app <bundle> --dmg <dmg> --pid <pid> --log <log>
       → NSApp.terminate
 助手   → 等待 pid 退出（≤120s）→ hdiutil attach → 复制 .app → detach
-       → 清除隔离属性 → open <bundle>
+       → 清除隔离属性
+       → 若原清单覆盖为 file://（本地 dev）→ 清除 DSHUpdateManifestURL 覆盖（回归默认 URL）
+       → open <bundle>
 重启后 → restorePendingIfAny()：若上次已暂存但未应用，恢复提醒
 ```
 
@@ -415,9 +439,9 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
 |---|---|---|
 | 窗口位置 | UserDefaults 自动保存 `MainWindow` | `setFrameAutosaveName` |
 | 更新检查时间戳 | `UserDefaults` `DSHLastAutoCheckDate` | 限制静默检查（24h） |
-| 跳过的版本 | `UserDefaults` `DSHSkippedUpdateVersion` | 在新版本出现前一直生效 |
-| 待应用的更新 | `UserDefaults` `DSHPendingUpdateVersion` / `DSHPendingUpdatePath` | 暂存成功后写入；重启后 `restorePendingIfAny()` 恢复提醒 |
-| 清单 URL 覆盖 | `UserDefaults` `DSHUpdateManifestURL` | 覆盖 Info.plist 值 |
+| 跳过的版本 | `UserDefaults` `DSHSkippedUpdateVersion`（`version@build` 复合键） | 以 `version`+`build` 为键；同版本串的新 build 不受旧跳过影响，在新版本出现前一直生效 |
+| 待应用的更新 | `UserDefaults` `DSHPendingUpdateVersion` / `DSHPendingUpdateBuild` / `DSHPendingUpdatePath` | 暂存成功后写入（含 `build`）；重启后 `restorePendingIfAny()` 按 version+build 恢复提醒 |
+| 清单 URL 覆盖 | `UserDefaults` `DSHUpdateManifestURL` | 覆盖 Info.plist 值；`file://`（本地 dev）清单安装成功后由 `dsh-updater` 自动清除，回归默认 URL（FR-9.11）；非 `file://` 覆盖保留 |
 | 已下载的 DMG | `~/Library/Caches/com.deepseek.dsh.desktop/dsh-desktop-<v>.dmg` | 校验后保留至用户点按应用 |
 | 日志 | `~/Library/Logs/dsh-desktop-*.log` | 应用 / 服务器 / 更新 |
 | 配置/会话 | `~/.dsh`（`DSH_HOME`） | 由内嵌后端持有 |

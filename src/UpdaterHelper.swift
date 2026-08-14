@@ -52,6 +52,26 @@ private func run(_ args: [String], logPath: String) -> Bool {
     return p.terminationStatus == 0
 }
 
+/// Read a UserDefaults string from the given bundle id, or nil if unset.
+private func readDefault(bundleID: String, key: String) -> String? {
+    let p = Process()
+    p.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
+    p.arguments = ["read", bundleID, key]
+    let pipe = Pipe()
+    p.standardOutput = pipe
+    p.standardError = Pipe()
+    do {
+        try p.run()
+        p.waitUntilExit()
+    } catch {
+        return nil
+    }
+    guard p.terminationStatus == 0 else { return nil }
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    let out = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    return (out?.isEmpty == false) ? out : nil
+}
+
 /// Poll until the given PID is gone or the timeout elapses.
 private func waitForExit(pid: Int32, timeout: TimeInterval, logPath: String) -> Bool {
     let deadline = Date().addingTimeInterval(timeout)
@@ -159,6 +179,23 @@ private func main() {
 
     // Best effort: drop quarantine so Gatekeeper doesn't nag (ad-hoc build).
     _ = run(["xattr", "-dr", "com.apple.quarantine", appPath], logPath: logPath)
+
+    // If the update came from a local file:// dev manifest (dev-update.sh), the
+    // DSHUpdateManifestURL override must be cleared so the app reverts to its
+    // embedded default (GitHub) manifest URL on the next check (spec S-0001
+    // FR-9.11). Non-file:// user overrides (e.g. an internal test server) are
+    // left untouched.
+    let bundleID = Bundle(path: appPath)?.bundleIdentifier
+    if let bundleID = bundleID,
+       let current = readDefault(bundleID: bundleID, key: "DSHUpdateManifestURL"),
+       current.hasPrefix("file://") {
+        log("Local dev manifest override was \(current) — clearing DSHUpdateManifestURL to revert to default URL.", to: logPath)
+        if run(["/usr/bin/defaults", "delete", bundleID, "DSHUpdateManifestURL"], logPath: logPath) {
+            log("Cleared DSHUpdateManifestURL.", to: logPath)
+        } else {
+            log("Warning: could not clear DSHUpdateManifestURL.", to: logPath)
+        }
+    }
 
     // 5. Relaunch the updated app.
     if run(["open", appPath], logPath: logPath) {

@@ -131,7 +131,12 @@ defaults write com.deepseek.dsh.desktop DSHUpdateManifestURL \
 Then trigger **Check for Updates…** (or wait for the silent check): the fresh
 build is staged in the background, the **Restart to Install …** item lights up,
 and clicking it swaps to the new build. Bump `DSH_DESKTOP_REV` each iteration —
-an identical version number is not treated as an update.
+an identical version number is still treated as an update when the git `build`
+rev differs (spec S-0001 §7.2).
+
+After a local `file://` update is applied, the app **automatically clears the
+`DSHUpdateManifestURL` override** and reverts to the default (GitHub) manifest
+URL on the next check (spec S-0001 FR-9.11) — no manual cleanup needed.
 
 ### Configuration
 

@@ -44,6 +44,10 @@ struct UpdateManifest: Decodable {
 /// is installed or terminated until the user clicks "Restart to Install…".
 struct PendingUpdate {
     let version: String
+    /// Build (git short rev) of the staged update. Kept so a same-version
+    /// different-build update is not mistaken for the already-applied build
+    /// (spec S-0001 §7.2).
+    let build: String?
     let dmgPath: URL
 }
 
@@ -85,6 +89,7 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
     private let lastAutoCheckKey = "DSHLastAutoCheckDate"
     private let skipVersionKey = "DSHSkippedUpdateVersion"
     private let pendingVersionKey = "DSHPendingUpdateVersion"
+    private let pendingBuildKey = "DSHPendingUpdateBuild"
     private let pendingPathKey = "DSHPendingUpdatePath"
 
     // MARK: - Current version
@@ -140,7 +145,7 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
         guard let pending = pendingUpdate else { return }
         let alert = NSAlert()
         alert.alertStyle = .informational
-        alert.messageText = "Restart to Install dsh-desktop \(pending.version)"
+        alert.messageText = "Restart to Install dsh-desktop \(revLabel(version: pending.version, build: pending.build))"
         alert.informativeText = "The app will quit and reopen with the new version."
         alert.addButton(withTitle: "Restart & Install")
         alert.addButton(withTitle: "Later")
@@ -164,15 +169,27 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
     func restorePendingIfAny() {
         guard pendingUpdate == nil else { return }
         guard let version = UserDefaults.standard.string(forKey: pendingVersionKey),
-              let path = UserDefaults.standard.string(forKey: pendingPathKey),
-              compareVersion(version, currentVersion) == .orderedDescending else { return }
+              let path = UserDefaults.standard.string(forKey: pendingPathKey) else { return }
+        let build = UserDefaults.standard.string(forKey: pendingBuildKey)
+        // Newer = strictly greater version, OR same version with a different
+        // build (spec S-0001 §7.2 build tiebreaker). A missing persisted build
+        // is treated as "same build" to stay backwards compatible.
+        let cmp = compareVersion(version, currentVersion)
+        let isNewer: Bool
+        switch cmp {
+        case .orderedDescending: isNewer = true
+        case .orderedSame: isNewer = build.map { $0 != currentBuild } ?? false
+        case .orderedAscending: isNewer = false
+        }
+        guard isNewer else { return }
         let dmg = URL(fileURLWithPath: path)
         guard FileManager.default.fileExists(atPath: dmg.path) else {
             UserDefaults.standard.removeObject(forKey: pendingVersionKey)
+            UserDefaults.standard.removeObject(forKey: pendingBuildKey)
             UserDefaults.standard.removeObject(forKey: pendingPathKey)
             return
         }
-        let pending = PendingUpdate(version: version, dmgPath: dmg)
+        let pending = PendingUpdate(version: version, build: build, dmgPath: dmg)
         pendingUpdate = pending
         onPendingUpdateChanged?(pending)
         Self.log("Restored staged update \(version) from a previous session.")
@@ -247,14 +264,21 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
         guard isNewer(manifest) else {
             if interactive {
                 presentOK(title: "Check for Updates",
-                          message: "You're up to date — dsh-desktop \(currentVersion).")
+                          message: "You're up to date — dsh-desktop \(revLabel(version: currentVersion, build: currentBuild)).")
             }
             return
         }
-        // Honour "Skip This Version" (interactive and silent alike).
-        if UserDefaults.standard.string(forKey: skipVersionKey) == manifest.version { return }
-        // Already staged & waiting to apply this exact version? Nothing to do.
-        if pendingUpdate?.version == manifest.version { return }
+        // Honour "Skip This Version" (interactive and silent alike), keyed by
+        // version+build so a skipped build never blocks a newer build of the
+        // same version (spec S-0001 §7.2). A legacy plain-version skip (stored
+        // before the build key existed) still skips every build of that version.
+        let storedSkip = UserDefaults.standard.string(forKey: skipVersionKey)
+        if storedSkip == skipKey(for: manifest) || storedSkip == manifest.version { return }
+        // Already staged & waiting to apply this exact version+build? Nothing
+        // to do. A different build of the same version is still a new update.
+        if let p = pendingUpdate,
+           p.version == manifest.version,
+           p.build == manifest.build { return }
 
         if interactive {
             offerDownload(manifest)
@@ -270,10 +294,10 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
     private func offerDownload(_ manifest: UpdateManifest) {
         let alert = NSAlert()
         alert.alertStyle = .informational
-        alert.messageText = "dsh-desktop \(manifest.version) is available"
+        alert.messageText = "dsh-desktop \(revLabel(version: manifest.version, build: manifest.build)) is available"
         let notes = manifest.releaseNotes ?? ""
         alert.informativeText = notes.isEmpty
-            ? "You're running \(currentVersion). Download it now and restart whenever you're ready."
+            ? "You're running \(revLabel(version: currentVersion, build: currentBuild)). Download it now and restart whenever you're ready."
             : notes
         alert.addButton(withTitle: "Download")
         alert.addButton(withTitle: "Skip This Version")
@@ -282,7 +306,7 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
         case .alertFirstButtonReturn:
             startDownload(manifest)
         case .alertSecondButtonReturn:
-            UserDefaults.standard.set(manifest.version, forKey: skipVersionKey)
+            UserDefaults.standard.set(skipKey(for: manifest), forKey: skipVersionKey)
         default:
             break
         }
@@ -302,6 +326,26 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
         // (spec S-0001 §7.2). A missing build means "same as current" (no update).
         if let build = m.build { return build != currentBuild }
         return false
+    }
+
+    /// Composite identity of an update for skip/pending bookkeeping:
+    /// `version@build` when the manifest carries a build, plain `version`
+    /// otherwise (backwards compatible with manifests that predate `build`).
+    /// A same-version different-build release is therefore a DIFFERENT update
+    /// and is never shadowed by a skip or a staged update of another build
+    /// (spec S-0001 §7.2).
+    private func skipKey(for manifest: UpdateManifest) -> String {
+        if let build = manifest.build { return "\(manifest.version)@\(build)" }
+        return manifest.version
+    }
+
+    /// User-facing "v<version> (rev:<build>)" label (spec S-0001 FR-9.10).
+    /// The build (git short rev) is shown so a same-version different-build
+    /// update is visually distinguishable. Falls back to version-only when the
+    /// build is missing.
+    private func revLabel(version: String, build: String?) -> String {
+        if let build, !build.isEmpty { return "v\(version) (rev:\(build))" }
+        return "v\(version)"
     }
 
     private func compareVersion(_ a: String, _ b: String) -> ComparisonResult {
@@ -425,9 +469,16 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
         isDownloading = false
         pendingManifest = nil
         hideProgress()
-        let pending = PendingUpdate(version: manifest.version, dmgPath: dmgPath)
+        let pending = PendingUpdate(version: manifest.version,
+                                    build: manifest.build,
+                                    dmgPath: dmgPath)
         pendingUpdate = pending
         UserDefaults.standard.set(manifest.version, forKey: pendingVersionKey)
+        if let build = manifest.build {
+            UserDefaults.standard.set(build, forKey: pendingBuildKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: pendingBuildKey)
+        }
         UserDefaults.standard.set(dmgPath.path, forKey: pendingPathKey)
         onPendingUpdateChanged?(pending)
         // Non-intrusive reminder: bounce the Dock icon once.
