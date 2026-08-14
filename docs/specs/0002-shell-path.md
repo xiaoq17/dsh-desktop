@@ -4,7 +4,7 @@
 |---|---|
 | **状态（Status）** | 已实现（Implemented） |
 | **规格 ID（Spec ID）** | S-0002 |
-| **文档版本（Document version）** | 0.2 |
+| **文档版本（Document version）** | 0.3 |
 | **日期（Date）** | 2026-08-14 |
 | **负责人（Owner）** | Qin Xiao |
 | **取代（Supersedes）** | — |
@@ -72,7 +72,7 @@ dsh-desktop 是 macOS GUI 应用，经 launchd / LaunchServices 启动时继承�
 ### 3.3 流程
 
 ```
-startServer → 探测登录 shell PATH（zsh→bash，5s 超时）
+startServer → 探测登录 shell PATH（zsh→bash，每 shell 3s 超时）
     → 成功？ → 是 → environment["PATH"] = 探测结果
     → 成功？ → 否 → 保留继承的 PATH（回退）
     → 启动 dsh --profile desktop（其余逻辑不变）

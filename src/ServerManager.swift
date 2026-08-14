@@ -83,9 +83,8 @@ final class ServerManager {
         let line = text.split(separator: "\n")
             .map(String.init)
             .last(where: { $0.hasPrefix(markerPrefix) })
-        let path = line?
-            .replacingOccurrences(of: markerPrefix, with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let path = line.map { String($0.dropFirst(markerPrefix.count)) }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         return (path?.isEmpty == false) ? path : nil
     }
 
