@@ -20,8 +20,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // the "Restart to Install…" menu item in sync with the update state.
         UpdateManager.shared.onPendingUpdateChanged = { [weak self] pending in
             self?.restartUpdateItem?.isEnabled = (pending != nil)
-            self?.restartUpdateItem?.title = pending.map { "Restart to Install dsh-desktop \($0.version)…" }
-                ?? "Restart to Install dsh-desktop…"
+            // Show version + build rev so a same-version different-build
+            // update is distinguishable (spec S-0001 FR-9.10).
+            let rev = (pending?.build?.isEmpty == false) ? " (rev:\(pending!.build!))" : ""
+            self?.restartUpdateItem?.title = pending.map {
+                "Restart to Install dsh-desktop v\($0.version)\(rev)…"
+            } ?? "Restart to Install dsh-desktop…"
         }
         UpdateManager.shared.restorePendingIfAny()
 

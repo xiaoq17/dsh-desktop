@@ -11,6 +11,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **同版本不同 build 的更新不再被吞掉**（spec S-0001 §7.2 次级比较此前只在
+  `isNewer` 生效，管线其余环节仍按版本串单独判定，导致同版本、rev 不同的新发布
+  检测不到）：
+  - `restorePendingIfAny` 重启恢复改为 `version`+`build` 判定——版本相同但 build
+    不同（桌面修订未递增的新构建）也恢复"重启并安装"提醒，不再被静默丢弃；
+  - "跳过此版本"改为以 `version@build` 复合键存储/匹配（兼容旧的纯版本键）——
+    跳过某一 build 不再屏蔽同版本串的后续新 build；
+  - "已暂存 & 待应用同版本"判定加入 build 比对——同版本不同 build 的新更新照常
+    进入下载/暂存流程；
+  - 暂存持久化新增 `DSHPendingUpdateBuild`，供重启恢复与"是否已暂存"判断使用。
+- **更新相关文案展示 build rev**（spec S-0001 FR-9.10）：手动检查的"有可用更新"
+  提示、安装确认框、以及"重启并安装 dsh-desktop …"菜单项均显示
+  `v<version> (rev:<git>)`，同版本不同 rev 的新构建在界面上直观可辨；"已是最新"
+  同时显示当前版本与 rev。
+- **dev-update 安装后自动回归默认清单**（spec S-0001 FR-9.11）：当更新来自本地
+  `file://` dev 清单（`dev-update.sh`）时，`dsh-updater` 换包成功后自动清除
+  `DSHUpdateManifestURL` 覆盖，使应用回归嵌入的默认（GitHub）清单 URL；非
+  `file://` 的用户自定义覆盖不受影响。
+
 ### Changed
 
 - **Independent upgrades for full & light**: the manifest now carries an `app`
