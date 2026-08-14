@@ -4,7 +4,7 @@
 |---|---|
 | **状态（Status）** | 已实现（Implemented） |
 | **规格 ID（Spec ID）** | S-0001 |
-| **文档版本（Document version）** | 1.23 |
+| **文档版本（Document version）** | 1.24 |
 | **日期（Date）** | 2026-08-14 |
 | **负责人（Owner）** | Qin Xiao |
 | **取代（Supersedes）** | — |
@@ -297,7 +297,11 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
     重启恢复时以 `version`+`build` 与当前运行 build 比较：版本更大，或版本相同但
     build 不同，均应恢复提醒；
   - "跳过此版本"以 `version`+`build` 为键，跳过某一 build 不得（MUST NOT）屏蔽
-    同版本串的后续新 build；
+    同版本串的后续新 build；**旧版遗留的纯版本 skip 值**（不含 `@` 的裸版本串，
+    如 `0.1.0.0`）必须（MUST）在首次遇到携带 `build` 的清单时被迁移/清理——它
+    无法表达"被跳过的具体构建"，不得（MUST NOT）作为整个版本串的通配符生效，
+    否则会吞掉同版本串的后续新 build；仅在清单本身同样**不携带** `build`（旧格式
+    清单）时，旧纯版本值才按原"跳过此版本"语义生效（向后兼容）。
   - "已暂存 & 待应用同版本"只有当 `build` 也一致时才视为已处理，不同 build 的新
     更新必须（MUST）照常进入下载/暂存流程。
 - 由此，dsh 升级（前三位变化）即使桌面修订归零，也必然判定为"有新版本"；
@@ -439,7 +443,7 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
 |---|---|---|
 | 窗口位置 | UserDefaults 自动保存 `MainWindow` | `setFrameAutosaveName` |
 | 更新检查时间戳 | `UserDefaults` `DSHLastAutoCheckDate` | 限制静默检查（24h） |
-| 跳过的版本 | `UserDefaults` `DSHSkippedUpdateVersion`（`version@build` 复合键） | 以 `version`+`build` 为键；同版本串的新 build 不受旧跳过影响，在新版本出现前一直生效 |
+| 跳过的版本 | `UserDefaults` `DSHSkippedUpdateVersion`（`version@build` 复合键） | 以 `version`+`build` 为键；同版本串的新 build 不受旧跳过影响，在新版本出现前一直生效。旧版遗留的裸版本值（不含 `@`）在首次遇到携带 `build` 的清单时被清理（迁移），仅对不携带 `build` 的旧格式清单按原"跳过此版本"语义生效 |
 | 待应用的更新 | `UserDefaults` `DSHPendingUpdateVersion` / `DSHPendingUpdateBuild` / `DSHPendingUpdatePath` | 暂存成功后写入（含 `build`）；重启后 `restorePendingIfAny()` 按 version+build 恢复提醒 |
 | 清单 URL 覆盖 | `UserDefaults` `DSHUpdateManifestURL` | 覆盖 Info.plist 值；`file://`（本地 dev）清单安装成功后由 `dsh-updater` 自动清除，回归默认 URL（FR-9.11）；非 `file://` 覆盖保留 |
 | 已下载的 DMG | `~/Library/Caches/com.deepseek.dsh.desktop/dsh-desktop-<v>.dmg` | 校验后保留至用户点按应用 |

@@ -27,6 +27,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   提示、安装确认框、以及"重启并安装 dsh-desktop …"菜单项均显示
   `v<version> (rev:<git>)`，同版本不同 rev 的新构建在界面上直观可辨；"已是最新"
   同时显示当前版本与 rev。
+- **旧版纯版本 skip 值不再吞掉同版本新 build**（spec S-0001 §7.2）：旧版遗留的
+  `DSHSkippedUpdateVersion` 裸版本串（如 `0.1.0.0`，不含 `@`）此前被当作整版本
+  通配符，会屏蔽同版本串、rev 不同的新发布；现改为首次遇到携带 `build` 的清单时
+  迁移/清理该旧值，仅对不携带 `build` 的旧格式清单按原"跳过此版本"语义生效。
 - **dev-update 安装后自动回归默认清单**（spec S-0001 FR-9.11）：当更新来自本地
   `file://` dev 清单（`dev-update.sh`）时，`dsh-updater` 换包成功后自动清除
   `DSHUpdateManifestURL` 覆盖，使应用回归嵌入的默认（GitHub）清单 URL；非
