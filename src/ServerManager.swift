@@ -41,8 +41,9 @@ final class ServerManager {
     /// never hard-code machine paths (spec S-0002 FR-1/2).
     ///
     /// Returns the first non-empty `$PATH` from `/bin/zsh -l` or
-    /// `/bin/bash -l`, or nil when both fail or time out (~5s) so startup is
-    /// never blocked by a slow user shell config (spec S-0002 NFR-1).
+    /// `/bin/bash -l`, or nil when both fail or time out. Per-shell timeout is
+    /// ~3s, worst case ~6s total, so startup is never blocked for long by a
+    /// slow user shell config (spec S-0002 NFR-1).
     static func loginShellPath() -> String? {
         for shell in ["/bin/zsh", "/bin/bash"] {
             guard FileManager.default.isExecutableFile(atPath: shell) else { continue }
@@ -53,10 +54,16 @@ final class ServerManager {
 
     /// Run a login shell once and return its `$PATH`, with a timeout guard so
     /// a slow/broken login script never blocks startup (spec S-0002 NFR-1).
+    ///
+    /// The shell prints PATH inside a unique marker line
+    /// (`DSH_PATH:<path>`), and we extract only the marker's payload so stray
+    /// stdout from login scripts (motd / banners / tool echoes) can never
+    /// pollute the returned PATH (spec S-0002 NFR-1, review suggestion).
+    private static let pathMarker = "DSH_PATH"
     private static func shellPath(from shell: String) -> String? {
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: shell)
-        proc.arguments = ["-l", "-c", "echo \"$PATH\""]
+        proc.arguments = ["-l", "-c", "printf '%s:%s\\n' \"\(Self.pathMarker)\" \"$PATH\""]
         let pipe = Pipe()
         proc.standardOutput = pipe
         proc.standardError = Pipe()   // swallow errors from login scripts
@@ -65,15 +72,21 @@ final class ServerManager {
         } catch {
             return nil
         }
-        // Timeout guard: terminate a stuck login shell after ~5s.
-        DispatchQueue.global().asyncAfter(deadline: .now() + 5) { [weak proc] in
+        // Timeout guard: terminate a stuck login shell after ~3s.
+        DispatchQueue.global().asyncAfter(deadline: .now() + 3) { [weak proc] in
             if proc?.isRunning == true { proc?.terminate() }
         }
         proc.waitUntilExit()
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        let out = String(data: data, encoding: .utf8)?
+        let text = String(data: data, encoding: .utf8) ?? ""
+        let markerPrefix = "\(Self.pathMarker):"
+        let line = text.split(separator: "\n")
+            .map(String.init)
+            .last(where: { $0.hasPrefix(markerPrefix) })
+        let path = line?
+            .replacingOccurrences(of: markerPrefix, with: "")
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        return (out?.isEmpty == false) ? out : nil
+        return (path?.isEmpty == false) ? path : nil
     }
 
     /// Absolute path to the bundled Node binary inside this .app (full build).

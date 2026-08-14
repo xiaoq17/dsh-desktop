@@ -4,7 +4,7 @@
 |---|---|
 | **状态（Status）** | 已实现（Implemented） |
 | **规格 ID（Spec ID）** | S-0002 |
-| **文档版本（Document version）** | 0.1 |
+| **文档版本（Document version）** | 0.2 |
 | **日期（Date）** | 2026-08-14 |
 | **负责人（Owner）** | Qin Xiao |
 | **取代（Supersedes）** | — |
@@ -53,12 +53,16 @@ dsh-desktop 是 macOS GUI 应用，经 launchd / LaunchServices 启动时继承�
 `ServerManager.startServer` 在组装守护进程环境（S-0001 §4.2）时，先探测用户
 **登录 shell** 的 `PATH`：
 
-1. 依次尝试 `/bin/zsh -l -c 'echo $PATH'`、`/bin/bash -l -c 'echo $PATH'`；
-2. 取第一个成功（退出码 0 且输出非空）的结果；
+1. 依次尝试 `/bin/zsh -l -c 'printf "DSH_PATH:%s" "$PATH"'`、
+   `/bin/bash -l -c 'printf "DSH_PATH:%s" "$PATH"'`；
+2. 解析 stdout 中带唯一标记 `DSH_PATH:` 的行，取标记后的内容为 PATH——
+   登录脚本（`.zprofile`/`.zshrc`）在非交互模式向 stdout 打印的 motd/banner
+   等杂讯不会污染结果；
 3. 若全部失败，回退为当前进程环境已有的 `PATH`（继承行为，不额外兜底）。
 
-探测在 `startServer` 内**同步**完成一次（超时约 5s，避免用户 shell 启动配置
-（如 `.zprofile`）卡住时阻塞启动流程；超时视为探测失败并回退）。
+探测在 `startServer` 内**同步**完成一次；每个 shell 超时约 3s（zsh + bash
+最坏合计约 6s），避免用户 shell 启动配置卡住时长时间阻塞启动流程；超时视为
+探测失败并回退。
 
 ### 3.2 注入
 
@@ -88,8 +92,9 @@ startServer → 探测登录 shell PATH（zsh→bash，5s 超时）
 
 | ID | 需求 | 状态 |
 |----|------|------|
-| S-0002-NFR-1 | 探测超时应当（SHOULD）≤ 5s，避免阻塞启动 | 已实现 |
-| S-0002-NFR-2 | 探测不应（SHOULD NOT）对应用自身环境产生副作用（只影响守护进程子进程） | 已实现 |
+| S-0002-NFR-1 | 单次 shell 探测超时应（SHOULD）≤ 3s，两个 shell 最坏总时长 ≤ 6s，避免长时间阻塞启动 | 已实现 |
+| S-0002-NFR-2 | 探测结果不受登录脚本 stdout 杂讯污染（仅取唯一标记行） | 已实现 |
+| S-0002-NFR-3 | 探测不应（SHOULD NOT）对应用自身环境产生副作用（只影响守护进程子进程） | 已实现 |
 
 ## 5. 待决问题
 
