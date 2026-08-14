@@ -286,10 +286,12 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
                 // Old-format manifest (no build) + legacy plain-version skip:
                 // keep the legacy "skip this version" behaviour.
                 if storedSkip == manifest.version { return }
-            } else {
-                // Legacy plain-version skip meets a build-carrying manifest:
-                // migrate the stale value away so the same-version new build
-                // is offered (spec S-0001 §7.2).
+            } else if storedSkip == manifest.version {
+                // Legacy plain-version skip meets a build-carrying manifest
+                // of the SAME version: drop the stale value so the same-version
+                // new build is offered (spec S-0001 §7.2). Skips of other
+                // versions are left untouched — they can't match this manifest
+                // anyway, and may still apply to their own version's new build.
                 UserDefaults.standard.removeObject(forKey: skipVersionKey)
             }
         }
