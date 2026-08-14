@@ -40,8 +40,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **内嵌后端子进程继承用户登录 shell 的 PATH**（spec S-0002）：macOS GUI app 经
   launchd 启动时 PATH 只有系统目录，导致 bash 工具无法直接调用 brew / 用户级命令
-  （如 `gh`）。现由 `ServerManager` 启动后端前用登录 shell（`zsh -l` / `bash -l`）
-  探测真实 PATH 并注入守护进程环境，不硬编码机器路径，失败时回退继承值。
+  （如 `gh`）。现由 `ServerManager` 启动后端前用登录 shell（`zsh -l` / `bash -l`，
+  每 shell 3s 超时）探测真实 PATH 并注入守护进程环境；仅取唯一标记行的内容，登录
+  脚本 stdout 杂讯不污染结果；不硬编码机器路径，失败时回退继承值。
 - **Independent upgrades for full & light**: the manifest now carries an `app`
   field (`dsh-desktop` / `dsh-desktop-light`) that the client validates against
   its own bundle id, and `dsh-updater` picks the DMG's `.app` by **bundle-id
