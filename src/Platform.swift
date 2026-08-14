@@ -21,14 +21,6 @@ enum Platform {
         #endif
     }
 
-    /// Whether a build on this platform should apply an update whose manifest
-    /// targets `platform`. A `nil`/empty manifest value means "any platform"
-    /// and is always accepted (backwards compatible with older manifests).
-    static func acceptsManifestPlatform(_ platform: String?) -> Bool {
-        guard let platform, !platform.isEmpty else { return true }
-        return platform == current
-    }
-
     /// Default user-data directory for the profile (the `DSH_HOME` concept).
     /// On macOS this is `~/.dsh`; a Windows port would use `%APPDATA%`.
     static var defaultHomePath: String {

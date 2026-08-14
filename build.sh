@@ -128,6 +128,7 @@ swiftc \
   "$ROOT/src/EditingWebView.swift" \
   "$ROOT/src/ServerManager.swift" \
   "$ROOT/src/UpdateManager.swift" \
+  "$ROOT/src/UpdatePolicy.swift" \
   "$ROOT/src/Platform.swift" \
   -framework Cocoa -framework WebKit
 

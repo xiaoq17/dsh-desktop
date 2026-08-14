@@ -165,6 +165,8 @@ URL on the next check (spec S-0001 FR-9.11) — no manual cleanup needed.
 ./make-dmg.sh       # package a .dmg
 ./install.sh        # install + launch
 ./publish-update.sh # build + dmg + update manifest (+ --release to publish)
+./scripts/run-tests.sh   # compile + run the UpdatePolicy unit tests
+./scripts/smoke-check.sh # product-level checks on dist/*.app + manifest (full|light)
 ```
 
 ### Project layout
@@ -175,13 +177,16 @@ src/                    Swift sources
   MainWindowController.swift  WKWebView window, recovery view, heartbeat monitor
   ServerManager.swift     starts the EMBEDDED server, parses its port, lifecycle
   UpdateManager.swift     auto-update: background check/stage + verify, restart-reminder, apply-on-click
+  UpdatePolicy.swift      pure update logic (version compare / skip & pending keys / manifest matching)
   UpdaterHelper.swift     standalone dsh-updater (swaps bundle + relaunches)
   Info.plist              bundle metadata
+tests/                  unit tests (UpdatePolicyTests — spec S-0001 §8.6)
 gen-icon.swift           draws the app icon → build/AppIcon.icns
 build.sh                 bundles Node + dsh deps, compiles, assembles .app
 make-dmg.sh              builds the one-click .dmg
 publish-update.sh        builds + emits update manifest (+ GitHub release with --release)
 install.sh               one-click installer
+scripts/                 helpers (install-hooks.sh, run-tests.sh, smoke-check.sh, hooks/)
 docs/                    spec docs (specs/README.md convention + NNNN-*.md) + screenshot (app.png)
 dist/                    output: .app, .dmg and update-manifest.json (gitignored)
 ```

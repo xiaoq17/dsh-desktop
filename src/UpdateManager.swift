@@ -174,14 +174,10 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
         // Newer = strictly greater version, OR same version with a different
         // build (spec S-0001 §7.2 build tiebreaker). A missing persisted build
         // is treated as "same build" to stay backwards compatible.
-        let cmp = compareVersion(version, currentVersion)
-        let isNewer: Bool
-        switch cmp {
-        case .orderedDescending: isNewer = true
-        case .orderedSame: isNewer = build.map { $0 != currentBuild } ?? false
-        case .orderedAscending: isNewer = false
-        }
-        guard isNewer else { return }
+        guard UpdatePolicy.shouldRestorePending(version: version,
+                                                build: build,
+                                                currentVersion: currentVersion,
+                                                currentBuild: currentBuild) else { return }
         let dmg = URL(fileURLWithPath: path)
         guard FileManager.default.fileExists(atPath: dmg.path) else {
             UserDefaults.standard.removeObject(forKey: pendingVersionKey)
@@ -244,7 +240,8 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
             return
         }
         // Update targets another platform → not applicable on this build.
-        if !Platform.acceptsManifestPlatform(manifest.platform) {
+        // Pure decision lives in UpdatePolicy.acceptsPlatform (spec S-0001 §8.6 T-1).
+        if !UpdatePolicy.acceptsPlatform(manifest.platform, currentPlatform: Platform.current) {
             if interactive {
                 presentOK(title: "Check for Updates",
                           message: "No update available for this platform.")
@@ -253,7 +250,7 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
         }
         // Update targets another variant (full vs light) → not for this app.
         // Missing `app` means the full build (backwards compatible).
-        if (manifest.app ?? "dsh-desktop") != Self.currentProductName {
+        if !UpdatePolicy.acceptsApp(manifest.app, productName: Self.currentProductName) {
             if interactive {
                 presentOK(title: "Check for Updates",
                           message: "This update is for \(manifest.app ?? "dsh-desktop"), "
@@ -270,30 +267,23 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
         }
         // Honour "Skip This Version" (interactive and silent alike), keyed by
         // version+build so a skipped build never blocks a newer build of the
-        // same version (spec S-0001 §7.2).
-        // A legacy plain-version skip (stored before the build key existed)
-        // must not act as a whole-version wildcard — it cannot express which
-        // build was skipped, so it would swallow a same-version new build.
-        // It is migrated away the first time it meets a manifest that carries
-        // a build, and only still applies to manifests that themselves carry
-        // no build (old-format manifests), preserving the legacy behaviour.
+        // same version (spec S-0001 §7.2). Pure decision logic lives in
+        // `UpdatePolicy.skipDecision` (spec S-0001 §8.6 T-1); here we apply
+        // its store mutation:
+        // - .clearStaleSkip: a legacy plain-version skip meets a build-carrying
+        //   manifest of the SAME version — drop the stale value so the
+        //   same-version new build is offered (skips of other versions are left
+        //   untouched); then proceed to offer/start the update.
         let storedSkip = UserDefaults.standard.string(forKey: skipVersionKey)
-        if let storedSkip {
-            if storedSkip.contains("@") {
-                // New-style composite key (version@build): exact match only.
-                if storedSkip == skipKey(for: manifest) { return }
-            } else if manifest.build == nil {
-                // Old-format manifest (no build) + legacy plain-version skip:
-                // keep the legacy "skip this version" behaviour.
-                if storedSkip == manifest.version { return }
-            } else if storedSkip == manifest.version {
-                // Legacy plain-version skip meets a build-carrying manifest
-                // of the SAME version: drop the stale value so the same-version
-                // new build is offered (spec S-0001 §7.2). Skips of other
-                // versions are left untouched — they can't match this manifest
-                // anyway, and may still apply to their own version's new build.
-                UserDefaults.standard.removeObject(forKey: skipVersionKey)
-            }
+        switch UpdatePolicy.skipDecision(storedSkip: storedSkip,
+                                         version: manifest.version,
+                                         build: manifest.build) {
+        case .skip:
+            return
+        case .clearStaleSkip:
+            UserDefaults.standard.removeObject(forKey: skipVersionKey)
+        case .proceed:
+            break
         }
         // Already staged & waiting to apply this exact version+build? Nothing
         // to do. A different build of the same version is still a new update.
@@ -341,12 +331,9 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
     /// on a dsh upgrade, so the `build` alone would wrongly report a downgrade
     /// in that case.
     private func isNewer(_ m: UpdateManifest) -> Bool {
-        let c = compareVersion(m.version, currentVersion)
-        if c != .orderedSame { return c == .orderedDescending }
-        // Same version (DSH_DESKTOP_REV equal): any different build = new build
-        // (spec S-0001 §7.2). A missing build means "same as current" (no update).
-        if let build = m.build { return build != currentBuild }
-        return false
+        UpdatePolicy.isNewer(version: m.version, build: m.build,
+                             thanCurrentVersion: currentVersion,
+                             currentBuild: currentBuild)
     }
 
     /// Composite identity of an update for skip/pending bookkeeping:
@@ -356,8 +343,7 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
     /// and is never shadowed by a skip or a staged update of another build
     /// (spec S-0001 §7.2).
     private func skipKey(for manifest: UpdateManifest) -> String {
-        if let build = manifest.build { return "\(manifest.version)@\(build)" }
-        return manifest.version
+        UpdatePolicy.skipKey(version: manifest.version, build: manifest.build)
     }
 
     /// User-facing "v<version> (rev:<build>)" label (spec S-0001 FR-9.10).
@@ -365,19 +351,11 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
     /// update is visually distinguishable. Falls back to version-only when the
     /// build is missing.
     private func revLabel(version: String, build: String?) -> String {
-        if let build, !build.isEmpty { return "v\(version) (rev:\(build))" }
-        return "v\(version)"
+        UpdatePolicy.revLabel(version: version, build: build)
     }
 
     private func compareVersion(_ a: String, _ b: String) -> ComparisonResult {
-        let ac = a.split(separator: ".").compactMap { Int($0) }
-        let bc = b.split(separator: ".").compactMap { Int($0) }
-        for i in 0..<max(ac.count, bc.count) {
-            let av = i < ac.count ? ac[i] : 0
-            let bv = i < bc.count ? bc[i] : 0
-            if av != bv { return av > bv ? .orderedDescending : .orderedAscending }
-        }
-        return .orderedSame
+        UpdatePolicy.compareVersions(a, b)
     }
 
     // MARK: - Download & verify (stage only — never restarts)

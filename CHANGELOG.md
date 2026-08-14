@@ -93,6 +93,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `file://`, and `dev-update.sh` produces a local manifest + DMG so a freshly
   built version flows through the same stage → remind → apply pipeline as a
   GitHub release.
+- **Update 纯逻辑提取与单元测试**（spec S-0001 §8.6 T-1/T-2/T-5）：更新策略的
+  纯逻辑（四段版本比较、skip/pending 键、manifest 平台/变体适配、newer 判定、
+  pending 恢复判定、`rev:` 文案）从 `UpdateManager` 提取到 Foundation-only 的
+  `src/UpdatePolicy.swift`，并以 `tests/UpdatePolicyTests.swift`（42 个断言）
+  覆盖；`scripts/run-tests.sh` 本地运行，CI 新增 `test` job 执行。
+  附带修正一处真实缺陷：版本比较现先剥离 `-rc` 预发布后缀再按点分比较，
+  `1.0.0.0-rc.6` 与 `1.0.0.0` 视为同版本。
+- **CI 产物级 smoke validation**（spec S-0001 §8.6 T-4）：`scripts/smoke-check.sh`
+  在 CI 构建后校验 `Info.plist` 关键字段（版本/build/git rev/标识/可执行名）、
+  helper 可执行文件、release manifest 字段完整性、DMG 存在；full / light 双变体
+  各跑一次。
+- **CI 构建矩阵改用 `publish-update.sh`**：full 与 light 各构建一次并生成
+  release manifest，替代原先仅 full 的手工 build+DMG，使产物校验覆盖双变体。
+- **仓库 hygiene**：`.gitignore` 补充 `.AppleDouble` / `Icon?` / `._*` /
+  `Desktop.ini` 等 Finder/系统垃圾文件规则（`scripts/.DS_Store` 早已不在仓库）。
 
 ## [0.1.0.0] - 2026-08-14
 

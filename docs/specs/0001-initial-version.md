@@ -4,7 +4,7 @@
 |---|---|
 | **状态（Status）** | 已实现（Implemented） |
 | **规格 ID（Spec ID）** | S-0001 |
-| **文档版本（Document version）** | 1.26 |
+| **文档版本（Document version）** | 1.28 |
 | **日期（Date）** | 2026-08-14 |
 | **负责人（Owner）** | Qin Xiao |
 | **取代（Supersedes）** | — |
@@ -56,7 +56,7 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
 | **更新清单（Update manifest）** | 描述最新版本的 JSON，从配置的 URL 获取。 |
 | **dsh-updater** | 负责替换应用包并重新启动的独立助手程序。 |
 | **Profile（配置文件）** | `$DSH_HOME/profiles/<name>/`：Cordis 插件分层 bundle（`package.json` 声明 bundles + `cordis.patch.yml` 用户补丁层）；`web` 为上游 profile，`desktop` 为桌面自有 profile。 |
-| **平台抽象（Platform abstraction）** | `src/Platform.swift`：集中平台标识、路径默认值与清单平台匹配，为未来跨平台壳提供单一扩展点。 |
+| **平台抽象（Platform abstraction）** | `src/Platform.swift`：集中平台标识与路径默认值，为未来跨平台壳提供单一扩展点；清单平台/变体匹配等**纯逻辑**集中在 `src/UpdatePolicy.swift`（§8.6 T-1）。 |
 
 ## 4. 架构
 
@@ -89,8 +89,8 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
 | 应用壳 | `src/AppDelegate.swift` | `@main` 入口、菜单构建、启动时更新检查、退出时停止服务器。 |
 | 窗口与 Web 视图 | `src/MainWindowController.swift`、`src/EditingWebView.swift` | 窗口创建、GUI 加载、恢复视图、心跳、编辑命令路由、外部链接处理。 |
 | 服务器管理 | `src/ServerManager.swift` | 预置 desktop profile、启动内嵌后端（`--profile desktop`）、从 stdout 解析端口、探测可达性、停止进程树。 |
-| 自动更新 | `src/UpdateManager.swift` | 拉取清单、版本比较、下载、校验和校验、安装交接。 |
-| 平台抽象 | `src/Platform.swift` | 平台标识（`darwin`/`win32`）、`DSH_HOME` 默认路径、更新清单平台匹配；壳中平台相关逻辑的唯一集中点。 |
+| 自动更新 | `src/UpdateManager.swift`、`src/UpdatePolicy.swift` | `UpdateManager`：拉取清单、下载、校验和校验、安装交接；`UpdatePolicy`：版本比较、skip/pending 键规则、manifest 平台/变体适配、newer 判定等**纯逻辑**（可单测，§8.6 T-1）。 |
+| 平台抽象 | `src/Platform.swift` | 平台标识（`darwin`/`win32`）、`DSH_HOME` 默认路径；壳中平台相关逻辑的唯一集中点（manifest 平台/变体匹配在 `UpdatePolicy`）。 |
 | 更新助手 | `src/UpdaterHelper.swift` | 独立可执行程序：等待应用退出 → 挂载 DMG → 替换包 → 重启。 |
 
 ### 4.2 平台边界与跨平台策略
@@ -99,9 +99,9 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
   版本方案（全部与 OS 无关）；壳 = 原生窗口/WebView、进程管理、换包重启。仅壳是
   平台相关的，且被刻意保持轻薄。
 - **平台决策集中**：所有平台相关逻辑集中于 `src/Platform.swift`（平台标识、路径
-  默认值、清单平台匹配），壳的其余逻辑保持 OS 无关——未来若迁移到跨平台壳
-  （如 Tauri：Rust + 系统 WebView，macOS 用 WKWebView、Windows 用 WebView2），
-  这是唯一需要镜像的扩展点。
+  默认值），清单平台匹配等**纯逻辑**在 `src/UpdatePolicy.swift`（§8.6 T-1），壳的
+  其余逻辑保持 OS 无关——未来若迁移到跨平台壳（如 Tauri：Rust + 系统 WebView，
+  macOS 用 WKWebView、Windows 用 WebView2），这是唯一需要镜像的扩展点。
 - **协议先行**：更新清单在协议层即区分 `platform`/`arch`/`minOSVersion`；
   Windows 端可实现同一协议并复用下载/校验/清单概念，仅换包机制不同
   （macOS 为 helper 换包重启；Windows 因运行中的 exe 不可覆盖，需 MSIX 原子更新
@@ -295,7 +295,9 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
 ### 7.2 版本比较
 
 - 以**版本串优先**：将 `version` 按点号分隔为数值段逐段比较；段数不同时缺失段
-  按 0 处理，天然支持四位桌面版本。
+  按 0 处理，天然支持四位桌面版本。比较前先剥离预发布后缀（`-` 及之后，如
+  `1.0.0.0-rc.6` → `1.0.0.0`），与 `build.sh` 从 dsh `package.json` 派生版本三
+  元组的做法一致（spec §8.4）。
 - 版本串相同（`DSH_DESKTOP_REV` 相同）时，以 `build`（git 短 revision，如
   `458b452`）作次级比较：**只要与当前 build 不同即视为新 build**；`build` 缺失
   视为与当前相同（非更新）。
@@ -447,6 +449,34 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
   变体误装；两个变体各自的 defaults（清单 URL / skip / pending）完全独立，
   `build` 相同互不影响。
 
+### 8.6 工程质量与测试
+
+工程化目标是「可持续迭代」：核心回归能**自动验证**、职责边界清晰、发布产物
+有**产物级校验**。本小节集中记录测试策略、代码组织原则与 CI 校验需求。
+
+- **T-1（测试分层）**：自动化测试以**纯逻辑单元测试**为主（Foundation 可编译、
+  不依赖 AppKit/UI），避免 UI/IO 耦合导致测试脆弱。更新管线中可纯逻辑化的部分
+  （版本比较、skip/pending 键规则、manifest 适配判断、newer 判定、pending 恢复
+  判定）必须（MUST）集中在可独立测试的模块（如 `UpdatePolicy`），不得散落在
+  `UpdateManager` 的私有方法中。
+- **T-2（覆盖范围）**：单元测试必须（MUST）至少覆盖：四段式版本比较
+  （`1.0.0.0` vs `1.0.0.1`、不同位数补齐）、同版本不同 build 的 new/old 判定、
+  skip 键（`version@build` 复合键 / 旧裸版本 / 同版本新 build 不被吞）、pending
+  恢复判定（版本更高 / 同版本 build 不同 / 已过期清理）、manifest 平台与变体
+  适配。
+- **T-3（拆分原则）**：职责过重的类型应当（SHOULD）拆分为单一职责对象：
+  `UpdateManager` 的纯逻辑与 UI/IO 分离；`MainWindowController` 的启动编排与
+  视图渲染分离。拆分不得（MUST NOT）改变既有行为（仅结构性重构，需保持
+  typecheck 与行为一致）。
+- **T-4（CI 产物校验）**：CI 除编译/语法检查外，必须（MUST）增加**产物级
+  smoke validation**：构建后校验 `dist/*.app/Contents/Info.plist` 关键字段
+  （`CFBundleShortVersionString` / `CFBundleVersion` / `DSHGitRevision` /
+  `CFBundleIdentifier`）、`dist/update-manifest*.json` 字段完整性（`version` /
+  `build` / `platform` / `app` / `dmgSha256`）、helper 可执行文件存在
+  （`Contents/Helpers/dsh-updater`），并对 full / light 双变体各跑一次。
+- **T-5（测试执行）**：单元测试必须在（MUST）CI 中执行（编译并运行，非仅编译），
+  失败即构建失败；本地可通过 `scripts/` 下的测试脚本复现。
+
 ## 9. 数据与状态
 
 | 数据 | 位置 | 说明 |
@@ -502,12 +532,14 @@ src/                    Swift 源码
   EditingWebView.swift     编辑命令路由进 Web 内容
   ServerManager.swift      内嵌服务器启动/停止/端口探测
   UpdateManager.swift      自动更新编排
-  Platform.swift            平台抽象（标识/路径/清单平台匹配）
+  UpdatePolicy.swift       更新纯逻辑（版本比较 / skip/pending 键 / manifest 适配，T-1）
+  Platform.swift            平台抽象（标识/路径默认值）
   UpdaterHelper.swift      独立换包助手
   Info.plist               bundle 元数据
+tests/                    单元测试（UpdatePolicyTests，T-2/T-5）
 build.sh / make-dmg.sh / install.sh / publish-update.sh
 gen-icon.swift            程序化图标生成器（不再由 build.sh 调用，保留历史）
-scripts/                  辅助脚本（install-hooks.sh / hooks/pre-commit）
+scripts/                  辅助脚本（install-hooks.sh / hooks/pre-commit / 测试脚本）
 assets/
   AppIcon.icns            应用图标（静态资产，取自参考图内圈鲸鱼图形，NFR-9）
   desktop-profile/        桌面 profile 模板（package.json / cordis.yml / cordis.patch.yml / pnpm-workspace.yaml）
@@ -539,5 +571,7 @@ Window        最小化（⌘M）关闭（⌘W）
 | FR-5.x | `AppDelegate.swift`、`EditingWebView.swift` |
 | FR-6.x、FR-7.x | `MainWindowController.swift` |
 | FR-8.x | `ServerManager.swift`、`AppDelegate.swift`、`UpdaterHelper.swift` |
-| FR-9.x | `UpdateManager.swift`、`UpdaterHelper.swift`、`AppDelegate.swift` |
+| FR-9.x | `UpdateManager.swift`、`UpdatePolicy.swift`、`UpdaterHelper.swift`、`AppDelegate.swift` |
+| T-1、T-2、T-5 | `UpdatePolicy.swift`、`tests/UpdatePolicyTests.swift`、`scripts/run-tests.sh` |
+| T-4 | `.github/workflows/build.yml`、`scripts/smoke-check.sh` |
 | 构建/发布 | `build.sh`、`make-dmg.sh`、`publish-update.sh` |
