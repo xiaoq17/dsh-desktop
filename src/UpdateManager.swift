@@ -270,10 +270,29 @@ final class UpdateManager: NSObject, URLSessionDownloadDelegate {
         }
         // Honour "Skip This Version" (interactive and silent alike), keyed by
         // version+build so a skipped build never blocks a newer build of the
-        // same version (spec S-0001 §7.2). A legacy plain-version skip (stored
-        // before the build key existed) still skips every build of that version.
+        // same version (spec S-0001 §7.2).
+        // A legacy plain-version skip (stored before the build key existed)
+        // must not act as a whole-version wildcard — it cannot express which
+        // build was skipped, so it would swallow a same-version new build.
+        // It is migrated away the first time it meets a manifest that carries
+        // a build, and only still applies to manifests that themselves carry
+        // no build (old-format manifests), preserving the legacy behaviour.
         let storedSkip = UserDefaults.standard.string(forKey: skipVersionKey)
-        if storedSkip == skipKey(for: manifest) || storedSkip == manifest.version { return }
+        if let storedSkip {
+            if storedSkip.contains("@") {
+                // New-style composite key (version@build): exact match only.
+                if storedSkip == skipKey(for: manifest) { return }
+            } else if manifest.build == nil {
+                // Old-format manifest (no build) + legacy plain-version skip:
+                // keep the legacy "skip this version" behaviour.
+                if storedSkip == manifest.version { return }
+            } else {
+                // Legacy plain-version skip meets a build-carrying manifest:
+                // migrate the stale value away so the same-version new build
+                // is offered (spec S-0001 §7.2).
+                UserDefaults.standard.removeObject(forKey: skipVersionKey)
+            }
+        }
         // Already staged & waiting to apply this exact version+build? Nothing
         // to do. A different build of the same version is still a new update.
         if let p = pendingUpdate,
