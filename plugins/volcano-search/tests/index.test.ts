@@ -146,7 +146,7 @@ describe("VolcanoSearchProvider key resolution", () => {
 
   it("resolves no key when the options carry no resolver at all", async () => {
     const provider = new VolcanoSearchProvider(() => ({
-      apiKeyEnv: "VOLC_2_API_KEY",
+      apiKeyEnv: "WEB_SEARCH_ARK_API_KEY",
       baseURL: "https://ark.example/v3",
       model: "m",
       limit: 10,
@@ -161,7 +161,7 @@ describe("VolcanoSearchProvider key resolution", () => {
   it("aborts when the credential resolver fails after the signal aborts", async () => {
     const controller = new AbortController();
     const provider = new VolcanoSearchProvider(() => ({
-      apiKeyEnv: "VOLC_2_API_KEY",
+      apiKeyEnv: "WEB_SEARCH_ARK_API_KEY",
       baseURL: "https://ark.example/v3",
       model: "m",
       limit: 10,

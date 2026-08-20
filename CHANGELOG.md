@@ -32,7 +32,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `DEEPSEEK_API_KEY`——复用用户既有的火山引擎（方舟）API Key 调用
   `POST /api/v3/responses`（声明 `web_search` 工具）：
   - 密钥解析优先级：字面量 `apiKey` → 环境 `ARK_API_KEY` → 凭据服务
-    `VOLC_2_API_KEY`（默认，与默认模型 provider 共用）→
+    `WEB_SEARCH_ARK_API_KEY`（默认，搜索专用 ref，与模型 key 隔离）→
     `$DSH_HOME/config/volcano.json` → `WEB_PROVIDER_CREDENTIAL_MISSING`；
   - 错误映射为稳定 `WebError` 码（鉴权 / **联网插件未开通 `WEB_PROVIDER_NOT_OPEN`**
     / 模型不支持 / 限流 / 网络），5xx 自动指数退避重试（1s→2s，最多 2 次）；
@@ -43,6 +43,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `$DSH_HOME/profiles/desktop/`（只补缺失、不覆盖用户内容）；对仍为模板默认空
   层的 `cordis.patch.yml` 做一次性迁移，使既有安装自动获得新接线（如火山
   web_search provider）。
+- **web_search 凭据 ref 隔离**：`web-search-volcano` 的默认 `apiKeyEnv` 由
+  `VOLC_2_API_KEY` 改为搜索专用 `WEB_SEARCH_ARK_API_KEY`，与模型 key 解耦
+  （轮换模型 key 不再影响搜索；搜索可独立计费/撤销）。
 
 ### Fixed
 

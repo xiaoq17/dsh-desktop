@@ -15,7 +15,7 @@
     - id: web-search-volcano
       name: ./plugins/volcano-search/lib/index.js
       config:
-        apiKeyEnv: VOLC_2_API_KEY
+        apiKeyEnv: WEB_SEARCH_ARK_API_KEY
         baseURL: https://ark.cn-beijing.volces.com/api/v3
         model: doubao-seed-2-1-turbo-260628
 

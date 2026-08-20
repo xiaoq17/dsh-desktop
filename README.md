@@ -171,8 +171,8 @@ plugin `plugins/volcano-search`).
   `web_search` tool; the model decides the keywords and returns a synthesized
   answer with cited `url_citation` sources.
 - **Key resolution** (first match wins): literal `apiKey` config → env
-  `ARK_API_KEY` → your existing credentials service entry (default
-  `VOLC_2_API_KEY`, i.e. the same key as the default model provider) →
+  `ARK_API_KEY` → your credentials service entry under the search-dedicated ref
+  (default `WEB_SEARCH_ARK_API_KEY`, isolated from the model key) →
   `$DSH_HOME/config/volcano.json` → `WEB_PROVIDER_CREDENTIAL_MISSING`.
 - **Activation**: the Ark **联网内容插件** (Web Search plugin) must be enabled
   for your account once — see

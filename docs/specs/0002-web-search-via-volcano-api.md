@@ -228,7 +228,7 @@ interface WebSearchProvider {
 
 | 键 | 默认值 | 说明 |
 |---|---|---|
-| `apiKeyEnv` | `VOLC_2_API_KEY` | 凭据服务中的凭据引用（桌面默认模型账号的 key）。 |
+| `apiKeyEnv` | `WEB_SEARCH_ARK_API_KEY` | 凭据服务中的凭据引用（搜索专用 ref，与模型 key 隔离；v1.1 起不再复用 `VOLC_2_API_KEY`）。 |
 | `apiKey` | — | 字面量 key（不推荐；避免密钥进入配置文件）。 |
 | `baseURL` | `https://ark.cn-beijing.volces.com/api/v3` | `/responses` 自动追加；可用 `ARK_BASE_URL` 覆盖。 |
 | `model` | `doubao-seed-2-1-turbo-260628` | 支持工具调用的模型；可用 `ARK_MODEL` 覆盖。 |
@@ -257,7 +257,7 @@ interface WebSearchProvider {
 
 1. `config.apiKey` 字面量（不推荐）。
 2. 环境变量 `ARK_API_KEY`（`launchEnvironmentOf` 解析，便于 CI / 临时调试）。
-3. 凭据服务 `credentials.resolve(apiKeyEnv)`：先查进程环境（如 `VOLC_2_API_KEY`），
+3. 凭据服务 `credentials.resolve(apiKeyEnv)`：先查进程环境（如 `WEB_SEARCH_ARK_API_KEY`），
    再查 `~/.dsh/.credentials.yaml`（dsh 凭据服务，可热更新）。**桌面用户既有的
    火山 key 存在这里，无需重新录入**。
 4. `$DSH_HOME/config/volcano.json` 的 `arkApiKey`（S-0002 v0.1 草案的存储位）。

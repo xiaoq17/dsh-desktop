@@ -19,7 +19,7 @@ registers the provider id **`volcano-ark`** through
 | Field | Default | Meaning |
 |---|---|---|
 | `apiKey` | — | Literal Ark API key (avoid in config files; prefer `apiKeyEnv`). |
-| `apiKeyEnv` | `VOLC_2_API_KEY` | Credential reference resolved per search. |
+| `apiKeyEnv` | `WEB_SEARCH_ARK_API_KEY` | Credential reference resolved per search (search-dedicated ref, isolated from the model key). |
 | `baseURL` | `https://ark.cn-beijing.volces.com/api/v3` | Ark endpoint; `/responses` is appended. |
 | `model` | `doubao-seed-2-1-turbo-260628` | Tool-calling model id. |
 | `limit` | `10` | Per-search result limit (1–50). |

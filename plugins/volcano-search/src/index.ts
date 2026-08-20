@@ -12,7 +12,7 @@
  * existing credential store):
  *   1. a literal `apiKey` in the plugin config
  *   2. the `ARK_API_KEY` launch environment
- *   3. the credentials service under `apiKeyEnv` (default `VOLC_2_API_KEY`),
+ *   3. the credentials service under `apiKeyEnv` (default `WEB_SEARCH_ARK_API_KEY`),
  *      which itself checks the process environment then `~/.dsh/.credentials.yaml`
  *   4. `$DSH_HOME/config/volcano.json` `arkApiKey`
  *   5. otherwise WEB_PROVIDER_CREDENTIAL_MISSING
@@ -42,7 +42,7 @@ const DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
 /** Default model: a Doubao tool-calling model confirmed on the user's account. */
 const DEFAULT_MODEL = "doubao-seed-2-1-turbo-260628";
 /** Default credential reference (matches the desktop's default model provider). */
-const DEFAULT_API_KEY_ENV = "VOLC_2_API_KEY";
+const DEFAULT_API_KEY_ENV = "WEB_SEARCH_ARK_API_KEY";
 /** Env names per spec S-0002 §3.3.2. */
 const ARK_API_KEY_ENV = "ARK_API_KEY";
 const ARK_BASE_URL_ENV = "ARK_BASE_URL";
@@ -59,7 +59,7 @@ const DEFAULT_SYSTEM_PROMPT = `你是联网搜索助手。当用户问题涉及�
 export interface Config {
   /** Literal Ark API key; prefer {@link apiKeyEnv} so no secret enters config files. */
   apiKey?: string;
-  /** Credential reference resolved per search; defaults to `VOLC_2_API_KEY`. */
+  /** Credential reference resolved per search; defaults to `WEB_SEARCH_ARK_API_KEY`. */
   apiKeyEnv?: string;
   /** Ark base URL; `/responses` is appended. Defaults to Beijing. */
   baseURL?: string;
