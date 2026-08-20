@@ -18,23 +18,55 @@ jobs:
         run: |
           SDK="$(xcrun --sdk macosx --show-sdk-path)"
           swiftc -target arm64-apple-macos13.0 -sdk "$SDK" -o /tmp/DSHDesktop-check \
-            src/AppDelegate.swift src/MainWindowController.swift src/EditingWebView.swift \
-            src/ServerManager.swift src/UpdateManager.swift src/UpdatePolicy.swift \
-            src/Platform.swift \
+            app/Sources/AppDelegate.swift app/Sources/MainWindowController.swift app/Sources/EditingWebView.swift \
+            app/Sources/ServerManager.swift app/Sources/UpdateManager.swift app/Sources/UpdatePolicy.swift \
+            app/Sources/Platform.swift \
             -framework Cocoa -framework WebKit
           swiftc -target arm64-apple-macos13.0 -sdk "$SDK" -o /tmp/dsh-updater-check \
-            src/UpdaterHelper.swift
+            app/Sources/UpdaterHelper.swift
 
       - name: Shell syntax check
-        run: bash -n scripts/build.sh scripts/make-dmg.sh scripts/install.sh scripts/publish-update.sh scripts/dev-update.sh scripts/run-tests.sh
+        run: bash -n scripts/*.sh scripts/hooks/pre-commit
 
   test:
-    name: Unit tests (UpdatePolicy)
+    name: Unit tests (Swift + plugins)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
 
-      - name: Run unit tests
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build plugins
+        run: pnpm run build
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Unit tests (vitest)
+        run: pnpm run test
+
+      - name: Coverage gate
+        run: pnpm run test:coverage
+
+      - name: Hygiene (knip / publint / constraints / node-next)
+        run: pnpm run hygiene
+
+      - name: Duplication gate
+        run: pnpm run duplication
+
+      - name: Doc gates
+        run: pnpm run doc-sync
+
+      - name: Run tests (Swift UpdatePolicy + plugin vitest)
         run: ./scripts/run-tests.sh
 
   build:
@@ -43,6 +75,11 @@ jobs:
     needs: [compile, test]
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
 
       - name: Build + package + manifest (full)
         run: ./scripts/publish-update.sh

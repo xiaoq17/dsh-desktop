@@ -1,75 +1,61 @@
 #!/bin/bash
-# Spec-First enforcement hook (pre-commit).
+# Repository hygiene gate (pre-commit) — mirrors the harness family convention.
 #
-# Blocks commits that change code without an accompanying change under
-# docs/specs/. This is the mechanical backstop for the repo's "spec-first"
-# convention (see AGENTS.md): code changes must update the spec FIRST.
+# Enforces byte-level hygiene on staged text files:
+#   * no whitespace errors (`git diff --cached --check`)
+#   * every staged text file ends with exactly one trailing newline
+#   * no CRLF line endings in the working tree (LF is canonical via .gitattributes)
+#
+# It deliberately does NOT enforce the Agent-Note rule — that is enforced by
+# code review (see AGENTS.md "Code-change gate").
 #
 # Install:  ./scripts/install-hooks.sh
 # The ByteDance bytesec security hook (global core.hooksPath) already chains to
 # this repo's .git/hooks/pre-commit, so both run — nothing is overwritten.
-#
-# Emergency escape hatches (use sparingly; catch up on the spec afterwards):
-#   * commit message contains [spec-skip]
-#   * DSH_SPEC_SKIP=1 git commit ...
-#   * git commit --no-verify
 set -euo pipefail
 
 REPO="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 [ -n "$REPO" ] || exit 0
 
-# Paths that are "code" and therefore require a spec update when changed.
-CODE_PATHS=( '^src/' '^assets/' '^scripts/' '^\.github/' )
-
-changed_code=0
-code_files=()
+# Staged files (tracked, non-deleted). while-read keeps this bash-3.2
+# compatible (macOS /bin/bash has no mapfile).
+staged=()
 while IFS= read -r f; do
-  for pat in "${CODE_PATHS[@]}"; do
-    if [[ "$f" =~ $pat ]]; then
-      changed_code=1
-      code_files+=("$f")
-      break
-    fi
-  done
+  staged+=("$f")
 done < <(git -C "$REPO" diff --cached --name-only --diff-filter=ACMR)
 
-# No code changed → nothing to enforce.
-[ "$changed_code" -eq 0 ] && exit 0
+violations=0
 
-# Spec change present → pass.
-if git -C "$REPO" diff --cached --name-only --diff-filter=ACMR | grep -q '^docs/specs/'; then
-  echo "[spec-first] ✓ code change accompanied by spec change." >&2
-  exit 0
+# 1. Whitespace errors (trailing spaces, space-before-tab, blank-at-eof).
+if ! git -C "$REPO" diff --cached --check; then
+  echo "[hygiene] ⛔ whitespace errors in staged changes (see above)." >&2
+  violations=$((violations + 1))
 fi
 
-# Overrides.
-if [[ "${DSH_SPEC_SKIP:-}" == "1" ]]; then
-  echo "[spec-first] DSH_SPEC_SKIP=1 — skipping spec check." >&2
-  exit 0
+# 2. Trailing-newline / CRLF check on staged text files.
+for f in "${staged[@]}"; do
+  path="$REPO/$f"
+  [ -f "$path" ] || continue
+  # Skip files git treats as binary (NUL byte present).
+  if grep -q $'\x00' "$path" 2>/dev/null; then
+    continue
+  fi
+  if grep -q $'\r' "$path" 2>/dev/null; then
+    echo "[hygiene] ⛔ CRLF in $f (LF is canonical; see .gitattributes)." >&2
+    violations=$((violations + 1))
+  fi
+  # Last byte must be a single LF (0x0a) — one trailing newline.
+  last_byte="$(tail -c 1 "$path" | od -An -t x1 | tr -d ' \n')"
+  if [ -n "$last_byte" ] && [ "$last_byte" != "0a" ]; then
+    echo "[hygiene] ⛔ $f does not end with a trailing newline." >&2
+    violations=$((violations + 1))
+  fi
+done
+
+if [ "$violations" -gt 0 ]; then
+  echo "[hygiene] fix the issues above, then re-stage and commit." >&2
+  exit 1
 fi
-if [ -f "$REPO/.git/COMMIT_EDITMSG" ] && grep -q '\[spec-skip\]' "$REPO/.git/COMMIT_EDITMSG" 2>/dev/null; then
-  echo "[spec-first] Commit message contains [spec-skip] — skipping spec check." >&2
-  exit 0
-fi
 
-cat >&2 <<'EOF'
-⛔ [spec-first] 本次提交修改了代码，但没有同步更新规格（docs/specs/）。
-
-    项目强约定（AGENTS.md）：所有代码修改必须先更新 spec，再修改代码。
-
-    修改的代码文件：
-EOF
-printf '      - %s\n' "${code_files[@]}" >&2
-cat >&2 <<'EOF'
-
-    做法：
-      1. 先修改 docs/specs/NNNN-*.md —— 新增/修订对应需求（FR/NFR、章节、
-         流程图），递增「文档版本（Document version）」并更新日期；
-      2. 把 spec 与代码放在同一次提交里。
-
-    紧急绕过（不推荐，事后必须补 spec）：
-      * 提交信息包含 [spec-skip]
-      * DSH_SPEC_SKIP=1 git commit ...
-      * git commit --no-verify
-EOF
-exit 1
+echo "[hygiene] ✓ staged changes pass the byte-level hygiene gate." >&2
+exit 0

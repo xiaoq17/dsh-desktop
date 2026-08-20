@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "plugins/volcano-search/src/**/*.ts",
+    "plugins/volcano-search/tests/**/*.ts",
+    "scripts/**/*.ts",
+    "vitest.config.ts"
+  ]
+}

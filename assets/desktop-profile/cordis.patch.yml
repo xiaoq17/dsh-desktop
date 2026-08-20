@@ -5,4 +5,26 @@
 # This is where the desktop app iterates independently of the upstream `web`
 # profile and the @deepseek-ai/dsh-web-app plugin — edit here for
 # desktop-specific plugin config without touching the upstream profile.
-[]
+
+# ── web_search via Volcano Ark (spec S-0002) ──────────────────────────────
+# The upstream `web-search-deepseek` provider needs a DEEPSEEK_API_KEY that
+# desktop users do not have. We register our own Ark-backed provider (plugin
+# file seeded under this profile's plugins/ dir, loaded relative to the profile
+# directory) and select it for the `web` seam instead.
+- insert:
+    - id: web-search-volcano
+      name: ./plugins/volcano-search/lib/index.js
+      config:
+        apiKeyEnv: WEB_SEARCH_ARK_API_KEY
+        baseURL: https://ark.cn-beijing.volces.com/api/v3
+        model: doubao-seed-2-1-turbo-260628
+
+# Select the Volcano provider for the model-facing web_search tool.
+- id: web
+  config:
+    searchProvider: volcano-ark
+
+# The DeepSeek provider is unused on desktop (no DEEPSEEK_API_KEY); disabling it
+# keeps the provider registry unambiguous and avoids misleading credential errors.
+- id: web-search-deepseek
+  disabled: true

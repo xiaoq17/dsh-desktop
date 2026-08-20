@@ -173,29 +173,73 @@ final class ServerManager {
     }
 
     /// Ensure `$DSH_HOME/profiles/desktop` exists, seeding it from the bundled
-    /// template on first launch. Never overwrites an existing user layer.
-    /// Returns false when the profile cannot be prepared.
+    /// template on first launch and syncing desktop-owned assets (plugins) into
+    /// pre-existing profiles. Never overwrites an existing user layer — the
+    /// profile's own `cordis.patch.yml` is only replaced when it is still the
+    /// untouched template default, so desktop-owned wiring (e.g. the Volcano
+    /// search provider, spec S-0002) reaches existing installs without touching
+    /// user edits. Returns false when the profile cannot be prepared.
     func ensureDesktopProfile() -> Bool {
         guard let template = ServerManager.bundledProfileTemplateURL else { return false }
         let home = ServerManager.resolvedHomePath()
         let profileDir = URL(fileURLWithPath: home)
             .appendingPathComponent("profiles/\(ServerManager.profileName)", isDirectory: true)
-        let marker = profileDir.appendingPathComponent("cordis.yml")
-        if FileManager.default.fileExists(atPath: marker.path) { return true }
         do {
             try FileManager.default.createDirectory(at: profileDir, withIntermediateDirectories: true)
+            // First-launch seed: copy template config files that are missing.
             for name in ["package.json", "cordis.yml", "cordis.patch.yml", "pnpm-workspace.yaml"] {
                 let src = template.appendingPathComponent(name)
                 let dst = profileDir.appendingPathComponent(name)
-                if FileManager.default.fileExists(atPath: src.path) {
+                if FileManager.default.fileExists(atPath: src.path)
+                    && !FileManager.default.fileExists(atPath: dst.path) {
                     try FileManager.default.copyItem(at: src, to: dst)
                 }
+            }
+            // Sync shipped plugins (compiled lib/ + package.json) into the
+            // profile: copy plugin directories that are missing, never overwrite
+            // anything already present. Create the destination plugins/ dir
+            // first — copyItem does not create intermediate directories.
+            let pluginsTemplate = template.appendingPathComponent("plugins", isDirectory: true)
+            if FileManager.default.fileExists(atPath: pluginsTemplate.path) {
+                let profilePluginsDir = profileDir.appendingPathComponent("plugins", isDirectory: true)
+                try FileManager.default.createDirectory(at: profilePluginsDir, withIntermediateDirectories: true)
+                let items = try FileManager.default.contentsOfDirectory(atPath: pluginsTemplate.path)
+                for item in items {
+                    let src = pluginsTemplate.appendingPathComponent(item)
+                    let dst = profilePluginsDir.appendingPathComponent(item)
+                    if !FileManager.default.fileExists(atPath: dst.path) {
+                        try FileManager.default.copyItem(at: src, to: dst)
+                    }
+                }
+            }
+            // One-time migration: replace a still-empty (template-default) user
+            // patch layer with the current template so desktop-owned wiring
+            // reaches pre-existing profiles; a user-edited layer is untouched.
+            let templatePatch = template.appendingPathComponent("cordis.patch.yml")
+            let profilePatch = profileDir.appendingPathComponent("cordis.patch.yml")
+            if Self.patchLayerIsEmptyDefault(at: profilePatch) {
+                try FileManager.default.removeItem(at: profilePatch)
+                try FileManager.default.copyItem(at: templatePatch, to: profilePatch)
             }
             return true
         } catch {
             ServerManager.appendToLog("Failed to seed desktop profile: \(error.localizedDescription)")
             return false
         }
+    }
+
+    /// True when a profile patch layer has no effective entries (only comments
+    /// and whitespace), i.e. it is still the untouched template default. Used to
+    /// migrate pre-existing profiles onto new desktop-owned wiring (spec S-0002)
+    /// without touching any user edits.
+    private static func patchLayerIsEmptyDefault(at url: URL) -> Bool {
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return false }
+        let effective = text
+            .split(separator: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasPrefix("#") }
+            .joined()
+        return effective == "[]"
     }
 
     // MARK: - Detection
