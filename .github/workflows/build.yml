@@ -26,7 +26,7 @@ jobs:
             app/Sources/UpdaterHelper.swift
 
       - name: Shell syntax check
-        run: bash -n scripts/build.sh scripts/make-dmg.sh scripts/install.sh scripts/publish-update.sh scripts/dev-update.sh scripts/run-tests.sh
+        run: bash -n scripts/*.sh scripts/hooks/pre-commit
 
   test:
     name: Unit tests (Swift + plugins)
@@ -42,8 +42,29 @@ jobs:
       - name: Install workspace deps
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck plugins
-        run: pnpm -r --filter './plugins/*' typecheck
+      - name: Build plugins
+        run: pnpm run build
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Unit tests (vitest)
+        run: pnpm run test
+
+      - name: Coverage gate
+        run: pnpm run test:coverage
+
+      - name: Hygiene (knip / publint / constraints / node-next)
+        run: pnpm run hygiene
+
+      - name: Duplication gate
+        run: pnpm run duplication
+
+      - name: Doc gates
+        run: pnpm run doc-sync
 
       - name: Run tests (Swift UpdatePolicy + plugin vitest)
         run: ./scripts/run-tests.sh

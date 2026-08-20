@@ -1,26 +1,24 @@
 # Spec（规格文档）
 
-dsh-desktop 的规格文档。每份 spec 都存放在本目录，按下面的命名
-规范编写、统一编号。
+dsh-desktop 的规格文档。每份 spec 都存放在本目录，按下面的命名规范编写、
+统一编号。规格是**设计记录**：描述需求与设计（FR/NFR、接口、流程），
+"如何实现这个变更的决策"由 [Agent Note](../../.agents/notes/README.md) 承载。
 
 > **本仓库的 spec 一律使用中文撰写**（技术标识、路径、命令、需求 ID 等保持
 > 英文/代码原样）。
 
-## 规格先行（Spec-First）
+## 代码修改门禁：Agent Notes（自 S-0003 起）
 
-**这是本仓库对代码修改的强约定（详见 [`AGENTS.md`](../../AGENTS.md)）：任何
-功能/行为性代码修改，必须先更新 spec，再修改代码，且与代码放同一次提交。**
+**任何功能/行为性代码修改必须先想清楚再动手，并在同一变更中附带 Agent Note**
+（记录决策、放弃的备选、所需验证）——详见
+[`.agents/notes/README.md`](../../.agents/notes/README.md) 与根
+[`AGENTS.md`](../../AGENTS.md)。
 
-- 顺序：**先**在对应 spec 中新增/修订需求（FR/NFR、章节、流程图）并递增
-  **文档版本**、更新 **日期**，**然后**才实现代码。
-- 覆盖范围：`src/`、`assets/`、`scripts/`（含 build / make-dmg / install /
-  publish-update / dev-update 等脚本）、`.github/` 等——凡影响应用行为/构建/
-  发布的改动都算。
-- 没有现成 spec 覆盖时：基于 [`_template.md`](_template.md) 新建
-  `NNNN-<slug>.md` 并在下方索引登记。
-- 机械校验：pre-commit 钩子（`scripts/hooks/pre-commit`）在「改了代码却没改
-  spec」时拦截提交，提示补齐（紧急绕过：`[spec-skip]` / `DSH_SPEC_SKIP=1` /
-  `--no-verify`）。
+- spec 的角色是**设计记录**：没有现成 spec 覆盖的领域，新建
+  `NNNN-<slug>.md` 并在下方索引登记；已有 spec 覆盖的，在对应 spec 中修订
+  需求与设计。
+- pre-commit 钩子（`scripts/hooks/pre-commit`）只做卫生检查（LF / 尾换行 /
+  `git diff --cached --check`），不校验 spec 或 Agent Note；后者由 review 把关。
 
 ## 命名规范
 
@@ -97,18 +95,10 @@ NNNN-<slug>.md
 - 需求 ID 按 spec 作用域命名：`S-XXXX-FR-1`（功能）、`S-XXXX-NFR-1`（非功能），
   从而在整个仓库内保持唯一。
 
-### 索引
-
-维护本文件（`docs/specs/README.md`）中的表格：
-
-| ID | 标题 | 状态 | 日期 | 文件 |
-|----|------|------|------|------|
-| S-0001 | 初始版本规格说明 | 已实现 | 2026-08-14 | [0001-initial-version.md](0001-initial-version.md) |
-| S-0002 | 基于火山引擎 API Key 的 Web Search 实现 | 已实现 | 2026-08-20 | [0002-web-search-via-volcano-api.md](0002-web-search-via-volcano-api.md) |
-
 ## 索引
 
 | ID | 标题 | 状态 | 日期 | 文件 |
 |----|------|------|------|------|
 | S-0001 | 初始版本规格说明 | 已实现 | 2026-08-14 | [0001-initial-version.md](0001-initial-version.md) |
 | S-0002 | 基于火山引擎 API Key 的 Web Search 实现 | 已实现 | 2026-08-20 | [0002-web-search-via-volcano-api.md](0002-web-search-via-volcano-api.md) |
+| S-0003 | 工程规范对齐（Agent Notes 模型 + dsk-poc 工具链） | 已实现 | 2026-08-20 | [0003-engineering-conventions.md](0003-engineering-conventions.md) |

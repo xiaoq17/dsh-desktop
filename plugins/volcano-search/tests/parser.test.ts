@@ -92,6 +92,66 @@ describe("mapArkResponse", () => {
   });
 });
 
+describe("mapArkResponse malformed-entry degradation", () => {
+  it("skips a web_search_call whose query is missing or not a string", () => {
+    const body = sampleResponse();
+    body.output.unshift({ type: "web_search_call", action: {} });
+    body.output.unshift({ type: "web_search_call", action: { query: 42 } });
+    body.output.unshift({ type: "web_search_call", action: { query: "" } });
+    const result = mapArkResponse(body);
+    expect(result.queries).toEqual(["今天北京天气"]);
+  });
+
+  it("skips non-object output entries and non-output_text blocks", () => {
+    const body = sampleResponse();
+    body.output.push(null, "string", { type: "function_call" });
+    body.output[1].content.push(null, "blob", { type: "input_text", text: "ignored" });
+    const result = mapArkResponse(body);
+    expect(result.content).toBe("北京今天晴，气温 12–20℃。");
+    expect(result.sources).toHaveLength(2);
+  });
+
+  it("skips malformed and empty annotations but keeps valid ones", () => {
+    const body = sampleResponse();
+    const textBlock = body.output[1].content[0];
+    textBlock.annotations.push(null, "str", { type: "other", url: "https://x" });
+    textBlock.annotations.push({ type: "url_citation", url: "" });
+    textBlock.annotations.push({ type: "url_citation", url: "https://valid.example" });
+    const result = mapArkResponse(body);
+    expect(result.sources).toHaveLength(3);
+    expect(result.sources[2].url).toBe("https://valid.example");
+  });
+
+  it("omits absent/empty title, snippet and publishedAt from a source", () => {
+    const body = sampleResponse();
+    body.output[1].content[0].annotations[0].title = "";
+    body.output[1].content[0].annotations[0].snippet = "";
+    body.output[1].content[0].annotations[0].publishedAt = "";
+    const result = mapArkResponse(body);
+    expect(result.sources[0]).toEqual({ url: "https://weather.example.com/beijing" });
+  });
+
+  it("treats a missing output array as empty (throws with no answer/sources)", () => {
+    const body = sampleResponse();
+    delete body.output;
+    expect(() => mapArkResponse(body)).toThrowError(/no web_search answer/i);
+  });
+
+  it("treats a non-array message content as no content", () => {
+    const body = sampleResponse();
+    body.output[1].content = "plain string";
+    expect(() => mapArkResponse(body)).toThrowError(/no web_search answer/i);
+  });
+
+  it("treats non-array annotations as no citations", () => {
+    const body = sampleResponse();
+    body.output[1].content[0].annotations = "not-an-array";
+    const result = mapArkResponse(body);
+    expect(result.content).toBe("北京今天晴，气温 12–20℃。");
+    expect(result.sources).toHaveLength(0);
+  });
+});
+
 describe("apiErrorFromResponse", () => {
   it("maps ToolNotOpen (404) to WEB_PROVIDER_NOT_OPEN", () => {
     const error = apiErrorFromResponse(404, { code: "ToolNotOpen", message: "not activated" }, "log-1");

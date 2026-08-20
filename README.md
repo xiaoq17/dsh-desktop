@@ -184,18 +184,25 @@ plugin `plugins/volcano-search`).
 
 ## Development
 
-> **Spec-first（规格先行）**：本仓库强约定——任何代码修改**先更新 spec 再改
-> 代码**，同一提交带上 spec（见 [`AGENTS.md`](AGENTS.md) 与
-> [`docs/specs/README.md`](docs/specs/README.md)）。pre-commit 钩子会在"改了
-> 代码却没改 spec"时拦截提交；安装钩子：`./scripts/install-hooks.sh`。
+> **Change gate：Agent Notes**——任何非平凡代码修改在同一变更中附带
+> [Agent Note](.agents/notes/README.md)（决策记录，双语）；设计/需求走
+> [spec](docs/specs/README.md)（`S-NNNN`，中文）。工程规范镜像 harness 家族
+> 仓库（[`AGENTS.md`](AGENTS.md)、[`docs/AGENTS.md`](docs/AGENTS.md)、
+> [`docs/development.md`](docs/development.md)、[`docs/testing.md`](docs/testing.md)）。
+> 安装钩子：`./scripts/install-hooks.sh`。
 
 ```bash
 pnpm install                # install the plugin workspace (plugins/*)
+pnpm run lint               # oxlint
+pnpm run typecheck          # strict NodeNext typecheck (plugins + scripts)
+pnpm run test               # vitest (source-plane)
+pnpm run test:coverage      # per-file 100% coverage gate on plugins/*/src
+pnpm run hygiene            # knip + publint + workspace constraints + NodeNext consumer
+pnpm run doc-sync           # doc gates (md-links / budgets / jsdoc / typecheck / agent-notes)
 ./scripts/build.sh          # download Node + install dsh deps + compile plugins + Swift → dist/*.app
 ./scripts/make-dmg.sh       # package a .dmg
 ./scripts/install.sh        # install + launch
 ./scripts/publish-update.sh # build + dmg + update manifest (+ --release to publish)
-pnpm -r --filter './plugins/*' build   # build plugins only (tsc → lib/)
 ./scripts/run-tests.sh      # Swift UpdatePolicy + plugin vitest tests
 ./scripts/smoke-check.sh    # product-level checks on dist/*.app + manifest (full|light)
 ```
@@ -213,7 +220,7 @@ app/Sources/               Swift sources (macOS shell)
 plugins/                   desktop Cordis plugins (pnpm workspace, TS → lib)
   volcano-search/            Volcano Ark web_search provider (S-0002)
 tests/                     unit tests (UpdatePolicyTests — spec S-0001 §8.6)
-scripts/                   build/dev/publish/install shell scripts + helpers
+scripts/                   repo gates (TS, via tsx) + build/dev/publish/install shell scripts + helpers
   build.sh                  bundles Node + dsh deps, compiles plugins + Swift, assembles .app
   make-dmg.sh               builds the one-click .dmg
   publish-update.sh         builds + emits update manifest (+ GitHub release with --release)
@@ -221,6 +228,8 @@ scripts/                   build/dev/publish/install shell scripts + helpers
   dev-update.sh             local dev update: build + DMG + file:// manifest
   run-tests.sh              Swift UpdatePolicy + plugin vitest tests
   smoke-check.sh            product-level checks on dist/*.app + manifest (full|light)
+  verify-md-links.ts …      doc gates (lint/typecheck/coverage/hygiene/duplication/doc-sync)
+.agents/                   Agent Notes (decision records; proposed/implemented/rejected, bilingual)
 assets/                    config & static files only
   AppIcon.icns              app icon
   Info.plist                bundle metadata
@@ -228,7 +237,8 @@ assets/                    config & static files only
 package.json               pnpm workspace root
 pnpm-workspace.yaml        workspace definition (plugins/*, nodeLinker: hoisted)
 tsconfig.base.json         shared TS base config (NodeNext, strict)
-docs/                      spec docs (specs/README.md convention + NNNN-*.md) + screenshot (app.png)
+docs/                      spec docs (specs/README.md convention + NNNN-*.md) + doc standards
+                           (AGENTS.md / development.md / testing.md / cookbook/) + screenshot (app.png)
 dist/                      output: .app, .dmg and update-manifest.json (gitignored)
 ```
 
@@ -256,8 +266,10 @@ tracked.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, style and the PR checklist.
-Please also read our [Code of Conduct](CODE_OF_CONDUCT.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the Agent-Note change gate,
+style and the PR checklist, plus the engineering conventions in
+[AGENTS.md](AGENTS.md) and [docs/AGENTS.md](docs/AGENTS.md). Please also read
+our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Security
 

@@ -1,0 +1,8 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreDependencies": [
+    "@deepseek-ai/dsh-llm",
+    "@deepseek-ai/dsh-timeout"
+  ],
+  "ignoreExportsUsedInFile": true
+}

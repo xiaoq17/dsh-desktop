@@ -28,7 +28,7 @@ import z from "@deepseek-ai/schemastery";
 import { credentialRef } from "@deepseek-ai/dsh-credentials";
 import { launchEnvironmentOf } from "@deepseek-ai/dsh-launch-environment";
 import { WebError, type WebSearchProvider, type WebSearchRequest, type WebSearchResult } from "@deepseek-ai/dsh-web";
-import { apiErrorFromResponse, mapArkResponse } from "./parser.ts";
+import { apiErrorFromResponse, mapArkResponse, VolcanoApiError } from "./parser.ts";
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = "web-search-volcano";
@@ -179,15 +179,26 @@ async function providerApiKey(options: SearchOptions, signal?: AbortSignal): Pro
 export class VolcanoSearchProvider implements WebSearchProvider {
   readonly id = PROVIDER_ID;
   readonly #resolveOptions: () => SearchOptions;
-  constructor(resolveOptions: () => SearchOptions) {
-    this.#resolveOptions = resolveOptions;
+  constructor(resolveOptionsProvider: () => SearchOptions) {
+    this.#resolveOptions = resolveOptionsProvider;
   }
+  /**
+   * Whether the provider can serve searches: a key source and non-empty endpoint/model.
+   * @returns true when a search may proceed.
+   */
   available(): boolean {
     const options = this.#resolveOptions();
     return ((options.apiKey?.length ?? 0) > 0 || options.resolveApiKey !== undefined)
       && options.baseURL.length > 0
       && options.model.length > 0;
   }
+  /**
+   * Run one web search: resolve the key, call the Ark Responses API with the
+   * `web_search` tool, and map the integrated answer + cited sources.
+   * @param request - the search request (query, optional result cap).
+   * @param signal - caller-provided cancellation (carries the tool timeout budget).
+   * @returns the synthesized answer with its cited sources.
+   */
   async search(request: WebSearchRequest, signal?: AbortSignal): Promise<WebSearchResult> {
     const options = this.#resolveOptions();
     const apiKey = await providerApiKey(options, signal);
@@ -241,17 +252,13 @@ export class VolcanoSearchProvider implements WebSearchProvider {
     }
     if (!response.ok) {
       let errorBody: { error?: { code?: string; message?: string } } | undefined;
-      let detail = `Volcano Ark API error (HTTP ${response.status})`;
       try {
         errorBody = (await response.json()) as { error?: { code?: string; message?: string } };
-        if (typeof errorBody?.error?.message === "string" && errorBody.error.message.length > 0) {
-          detail = errorBody.error.message;
-        }
       } catch {
-        // Non-JSON error body: keep the status-based message.
+        // Non-JSON error body: apiErrorFromResponse falls back to the status message.
       }
       const mapped = apiErrorFromResponse(response.status, errorBody?.error, response.headers.get("x-tt-logid"));
-      throw new WebError(mapped.message || detail, mapped.code, { cause: mapped });
+      throw new WebError(mapped.message, mapped.code, { cause: mapped });
     }
     let data: unknown;
     try {
@@ -265,8 +272,10 @@ export class VolcanoSearchProvider implements WebSearchProvider {
       return { content: parsed.content, sources: parsed.sources, truncated: false };
     } catch (error) {
       if (signal?.aborted === true || isAbortError(error)) throw abortError(signal, error);
-      if (error instanceof WebError) throw error;
-      throw new WebError(error instanceof Error ? error.message : String(error), (error as { code?: string }).code ?? "WEB_PROVIDER_ERROR", { cause: error as Error });
+      // The parser throws only VolcanoApiError with a stable code + message
+      // (never WebError); wrap it directly rather than guessing at a shape.
+      const apiError = error as VolcanoApiError;
+      throw new WebError(apiError.message, apiError.code, { cause: error as Error });
     }
   }
 }

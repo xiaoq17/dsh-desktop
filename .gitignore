@@ -19,6 +19,7 @@ lib/
 **/lib/
 *.tsbuildinfo
 coverage/
+scripts/.tmp-*
 npm-debug.log*
 pnpm-debug.log
 

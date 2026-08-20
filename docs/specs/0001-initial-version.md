@@ -527,9 +527,9 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
   （原 S-0002-FR-2）；`dev-update.sh` / `install.sh` / `publish-update.sh` 对其它
   脚本的调用必须（MUST）指向 `scripts/` 内路径（原 S-0002-FR-3）。
 - **CI 与钩子**：`.github/workflows/build.yml` 的 shell 语法检查与构建步骤必须
-  （MUST）引用 `scripts/` 内路径（原 S-0002-FR-4）；`scripts/hooks/pre-commit` 的
-  CODE_PATHS 由 `^scripts/` 覆盖，必须（MUST）移除顶层 `*.sh` 与 `gen-icon.swift`
-  特例（原 S-0002-FR-5）。
+  （MUST）引用 `scripts/` 内路径（原 S-0002-FR-4）；`scripts/hooks/pre-commit`
+  为卫生门（LF / 尾换行 / `git diff --cached --check`），不再维护 CODE_PATHS
+  特例（原 S-0002-FR-5 已随 0003 的钩子重写而废弃）。
 - **文档与模板**：README / CONTRIBUTING / SECURITY / AGENTS.md / spec 与
   `.github/` 模板中的脚本命令引用必须（MUST）为新路径（原 S-0002-FR-7）。
 - **行为不变**：本次整理为纯路径调整，不得（MUST NOT）改变脚本的构建/发布行为
@@ -613,7 +613,7 @@ scripts/                  构建/发布/安装脚本与辅助脚本
   run-tests.sh            Swift UpdatePolicy + 插件 vitest 测试运行器
   smoke-check.sh          产物级校验（T-4，full/light）
   install-hooks.sh        安装 pre-commit 钩子
-  hooks/pre-commit        规格先行强制钩子（CODE_PATHS 含 app/、plugins/、assets/…）
+  hooks/pre-commit        卫生门钩子（LF / 尾换行 / git diff --cached --check；Agent-Note 门由评审执行，见 0003）
 tests/                    单元测试（UpdatePolicyTests，T-2/T-5）
 assets/                   只放配置与静态文件
   AppIcon.icns            应用图标（静态资产，NFR-9）

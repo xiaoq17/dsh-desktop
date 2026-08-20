@@ -13,6 +13,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **工程规范对齐 harness 家族**（spec [S-0003](docs/specs/0003-engineering-conventions.md)）：
+  - 代码门禁由「规格先行」切换为上游 **Agent Notes 决策记录**模型（非平凡变更同
+    变更附带记录，`.agents/notes/` 双语）；pre-commit 钩子改为卫生检查（LF /
+    尾换行 / `git diff --cached --check`）；
+  - 工具链对齐 dsk-poc：根 workspace 门禁脚本（lint / typecheck / test /
+    test:coverage / hygiene / duplication / doc-sync），TS7 原生编译器 +
+    `typescript/unstable` 门禁、oxlint、knip、publint、tsx、vitest 4、
+    `@vitest/coverage-v8`；插件覆盖率门 **每文件 100%**（`index.ts` provider 补齐
+    单测，含 mock fetch / 凭据 / 启动环境，45 用例全绿）；
+  - 文档分层（`docs/AGENTS.md` 文档标准、`development.md`、`testing.md`、
+    `cookbook/adding-a-plugin.md`）+ 插件契约 README；spec 保留为中文设计记录；
+  - GitHub 协作规范（CONTRIBUTING 重写：Agent Note 门禁、`kind/*`+`area/*`
+    label、PR 清单）；CI 扩展为跑全部门禁。
 - **桌面内置联网搜索**（spec [S-0002](docs/specs/0002-web-search-via-volcano-api.md)）：
   新增 TypeScript 插件 `plugins/volcano-search`，通过 `ctx.web` seam 注册
   `volcano-ark` 搜索 provider，使模型侧 `web_search` 工具在桌面版可用且不再依赖

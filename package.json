@@ -3,18 +3,37 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "dsh-desktop workspace: the native macOS app (app/) plus its Cordis plugins (plugins/*) shipped through the desktop profile.",
+  "description": "dsh-desktop workspace: the native macOS app (app/) plus its Cordis plugins (plugins/*) shipped through the desktop profile. Engineering conventions mirror deepseek-harness / dsk-poc (see AGENTS.md and docs/AGENTS.md).",
   "scripts": {
     "build": "pnpm -r --filter './plugins/*' build",
     "build:plugins": "pnpm -r --filter './plugins/*' build",
-    "test": "pnpm -r --filter './plugins/*' test",
+    "clean": "tsx scripts/clean.ts",
+    "typecheck": "tsc -p tsconfig.typecheck.json",
+    "lint": "oxlint .",
+    "test": "vitest run",
     "test:plugins": "pnpm -r --filter './plugins/*' test",
-    "typecheck": "pnpm -r --filter './plugins/*' typecheck",
-    "clean": "pnpm -r --filter './plugins/*' clean"
+    "test:coverage": "vitest run -c vitest.config.ts --coverage",
+    "hygiene": "pnpm run hygiene:knip && pnpm run hygiene:publint && pnpm run hygiene:constraints && pnpm run hygiene:node-next",
+    "hygiene:knip": "knip",
+    "hygiene:publint": "publint ./plugins/volcano-search",
+    "hygiene:constraints": "tsx scripts/check-workspace-constraints.ts",
+    "hygiene:node-next": "tsx scripts/verify-node-next-types.ts",
+    "duplication": "tsx scripts/check-duplication.ts",
+    "doc-sync": "pnpm run doc:links && pnpm run doc:budgets && pnpm run doc:jsdoc && pnpm run doc:typecheck && pnpm run doc:agent-notes",
+    "doc:links": "tsx scripts/verify-md-links.ts",
+    "doc:budgets": "tsx scripts/verify-doc-budgets.ts",
+    "doc:jsdoc": "tsx scripts/verify-export-jsdoc.ts",
+    "doc:typecheck": "tsx scripts/doc-typecheck.ts",
+    "doc:agent-notes": "tsx scripts/verify-agent-note-format.ts"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "@types/node": "^26.2.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "knip": "^6.32.2",
+    "oxlint": "^1.79.0",
+    "publint": "^0.3.23",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.11"
   }
 }

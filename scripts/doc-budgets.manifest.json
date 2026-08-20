@@ -1,0 +1,15 @@
+{
+  "defaultCeiling": 0,
+  "documents": {
+    "AGENTS.md": 700,
+    "README.md": 1400,
+    "docs/AGENTS.md": 600,
+    "docs/development.md": 300,
+    "docs/testing.md": 400,
+    "docs/cookbook/adding-a-plugin.md": 400,
+    "docs/specs/README.md": 350,
+    "docs/specs/0001-initial-version.md": 2000,
+    "docs/specs/0002-web-search-via-volcano-api.md": 900,
+    "docs/specs/0003-engineering-conventions.md": 700
+  }
+}
