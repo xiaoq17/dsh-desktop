@@ -89,8 +89,10 @@ DSH_PKG_VERSION="0.1.0-rc.6"
 if [ "$LIGHT" != "1" ] && [ ! -d "$BUILD_DIR/dsh/node_modules/@deepseek-ai/dsh" ]; then
   echo "==> Installing @deepseek-ai/dsh (production deps only)"
   mkdir -p "$BUILD_DIR/dsh"
+  # Raise the V8 heap for npm: resolving the dsh dependency tree can exceed the
+  # default heap on memory-constrained CI runners (JavaScript heap out of memory).
   (cd "$BUILD_DIR/dsh" \
-    && npm install --omit=dev --no-audit --no-fund "@deepseek-ai/dsh@${DSH_PKG_VERSION}" >/dev/null)
+    && NODE_OPTIONS="--max-old-space-size=4096" npm install --omit=dev --no-audit --no-fund "@deepseek-ai/dsh@${DSH_PKG_VERSION}" >/dev/null)
 fi
 
 # ── 2b. Derive the desktop version from the dsh version ────────────────
