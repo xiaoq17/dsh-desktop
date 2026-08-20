@@ -104,9 +104,11 @@ NNNN-<slug>.md
 | ID | 标题 | 状态 | 日期 | 文件 |
 |----|------|------|------|------|
 | S-0001 | 初始版本规格说明 | 已实现 | 2026-08-14 | [0001-initial-version.md](0001-initial-version.md) |
+| S-0002 | 基于火山引擎 API Key 的 Web Search 实现 | 已实现 | 2026-08-20 | [0002-web-search-via-volcano-api.md](0002-web-search-via-volcano-api.md) |
 
 ## 索引
 
 | ID | 标题 | 状态 | 日期 | 文件 |
 |----|------|------|------|------|
 | S-0001 | 初始版本规格说明 | 已实现 | 2026-08-14 | [0001-initial-version.md](0001-initial-version.md) |
+| S-0002 | 基于火山引擎 API Key 的 Web Search 实现 | 已实现 | 2026-08-20 | [0002-web-search-via-volcano-api.md](0002-web-search-via-volcano-api.md) |

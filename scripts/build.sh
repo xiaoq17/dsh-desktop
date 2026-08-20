@@ -123,13 +123,13 @@ swiftc \
   -target arm64-apple-macos13.0 \
   -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
   -o "$BUILD_DIR/DSHDesktop" \
-  "$ROOT/src/AppDelegate.swift" \
-  "$ROOT/src/MainWindowController.swift" \
-  "$ROOT/src/EditingWebView.swift" \
-  "$ROOT/src/ServerManager.swift" \
-  "$ROOT/src/UpdateManager.swift" \
-  "$ROOT/src/UpdatePolicy.swift" \
-  "$ROOT/src/Platform.swift" \
+  "$ROOT/app/Sources/AppDelegate.swift" \
+  "$ROOT/app/Sources/MainWindowController.swift" \
+  "$ROOT/app/Sources/EditingWebView.swift" \
+  "$ROOT/app/Sources/ServerManager.swift" \
+  "$ROOT/app/Sources/UpdateManager.swift" \
+  "$ROOT/app/Sources/UpdatePolicy.swift" \
+  "$ROOT/app/Sources/Platform.swift" \
   -framework Cocoa -framework WebKit
 
 # ── 3b. Compile the standalone updater helper ─────────────────────────
@@ -141,12 +141,26 @@ swiftc \
   -target arm64-apple-macos13.0 \
   -sdk "$(xcrun --sdk macosx --show-sdk-path)" \
   -o "$BUILD_DIR/dsh-updater" \
-  "$ROOT/src/UpdaterHelper.swift"
+  "$ROOT/app/Sources/UpdaterHelper.swift"
+
+# ── 2c. Compile the desktop plugins (plugins/*) ───────────────────────
+# Plugins are TypeScript workspace packages (spec S-0002, dsk-poc layout):
+# `pnpm -r build` emits each plugin's lib/ (ESM JS + .d.ts), which the app
+# ships inside the profile template below.
+if [ -d "$ROOT/plugins" ]; then
+  echo "==> Compiling desktop plugins"
+  command -v pnpm >/dev/null 2>&1 || { echo "error: pnpm is required to build plugins; install via 'npm i -g pnpm'" >&2; exit 1; }
+  if ! [ -d "$ROOT/node_modules" ]; then
+    echo "  -> installing workspace dependencies"
+    (cd "$ROOT" && pnpm install --frozen-lockfile >/dev/null)
+  fi
+  (cd "$ROOT" && pnpm -r --filter './plugins/*' build >/dev/null)
+fi
 
 # ── 4. Assemble the .app bundle ───────────────────────────────────────
 echo "==> Assembling .app bundle"
 cp "$BUILD_DIR/DSHDesktop" "$MACOS/$EXEC_NAME"
-cp "$ROOT/src/Info.plist" "$CONTENTS/Info.plist"
+cp "$ROOT/assets/Info.plist" "$CONTENTS/Info.plist"
 cp "$ROOT/assets/AppIcon.icns" "$RESOURCES/AppIcon.icns"
 
 # Updater helper (used by auto-update)
@@ -169,6 +183,19 @@ fi
 
 # Desktop profile template — seeded into $DSH_HOME/profiles/desktop on first launch
 cp -R "$ROOT/assets/desktop-profile" "$RESOURCES/desktop-profile"
+
+# Compiled desktop plugins — shipped inside the profile template (each plugin's
+# compiled lib/ + package.json), so ensureDesktopProfile() seeds them into the
+# profile alongside the template's config-only files.
+if [ -d "$ROOT/plugins" ]; then
+  for plugin in "$ROOT"/plugins/*/; do
+    name="$(basename "$plugin")"
+    [ -d "$plugin/lib" ] || continue
+    mkdir -p "$RESOURCES/desktop-profile/plugins/$name"
+    cp -R "$plugin/lib" "$RESOURCES/desktop-profile/plugins/$name/lib"
+    [ -f "$plugin/package.json" ] && cp "$plugin/package.json" "$RESOURCES/desktop-profile/plugins/$name/package.json"
+  done
+fi
 
 # Version plist merge
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$CONTENTS/Info.plist" 2>/dev/null || true

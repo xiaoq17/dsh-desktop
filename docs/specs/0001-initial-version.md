@@ -4,8 +4,8 @@
 |---|---|
 | **状态（Status）** | 已实现（Implemented） |
 | **规格 ID（Spec ID）** | S-0001 |
-| **文档版本（Document version）** | 1.34 |
-| **日期（Date）** | 2026-08-14 |
+| **文档版本（Document version）** | 1.35 |
+| **日期（Date）** | 2026-08-20 |
 | **负责人（Owner）** | Qin Xiao |
 | **取代（Supersedes）** | — |
 | **被取代（Superseded by）** | — |
@@ -86,22 +86,23 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
 
 | 组件 | 文件 | 职责 |
 |---|---|---|
-| 应用壳 | `src/AppDelegate.swift` | `@main` 入口、菜单构建、启动时更新检查、退出时停止服务器。 |
-| 窗口与 Web 视图 | `src/MainWindowController.swift`、`src/EditingWebView.swift` | 窗口创建、GUI 加载、恢复视图、心跳、编辑命令路由、外部链接处理。 |
-| 服务器管理 | `src/ServerManager.swift` | 预置 desktop profile、启动内嵌后端（`--profile desktop`）、从 stdout 解析端口、探测可达性、停止进程树。 |
-| 自动更新 | `src/UpdateManager.swift`、`src/UpdatePolicy.swift` | `UpdateManager`：拉取清单、下载、校验和校验、安装交接；`UpdatePolicy`：版本比较、skip/pending 键规则、manifest 平台/变体适配、newer 判定等**纯逻辑**（可单测，§8.6 T-1）。 |
-| 平台抽象 | `src/Platform.swift` | 平台标识（`darwin`/`win32`）、`DSH_HOME` 默认路径；壳中平台相关逻辑的唯一集中点（manifest 平台/变体匹配在 `UpdatePolicy`）。 |
-| 更新助手 | `src/UpdaterHelper.swift` | 独立可执行程序：等待应用退出 → 挂载 DMG → 替换包 → 重启。 |
+| 应用壳 | `app/Sources/AppDelegate.swift` | `@main` 入口、菜单构建、启动时更新检查、退出时停止服务器。 |
+| 窗口与 Web 视图 | `app/Sources/MainWindowController.swift`、`app/Sources/EditingWebView.swift` | 窗口创建、GUI 加载、恢复视图、心跳、编辑命令路由、外部链接处理。 |
+| 服务器管理 | `app/Sources/ServerManager.swift` | 预置 desktop profile、启动内嵌后端（`--profile desktop`）、从 stdout 解析端口、探测可达性、停止进程树。 |
+| 自动更新 | `app/Sources/UpdateManager.swift`、`app/Sources/UpdatePolicy.swift` | `UpdateManager`：拉取清单、下载、校验和校验、安装交接；`UpdatePolicy`：版本比较、skip/pending 键规则、manifest 平台/变体适配、newer 判定等**纯逻辑**（可单测，§8.6 T-1）。 |
+| 平台抽象 | `app/Sources/Platform.swift` | 平台标识（`darwin`/`win32`）、`DSH_HOME` 默认路径；壳中平台相关逻辑的唯一集中点（manifest 平台/变体匹配在 `UpdatePolicy`）。 |
+| 更新助手 | `app/Sources/UpdaterHelper.swift` | 独立可执行程序：等待应用退出 → 挂载 DMG → 替换包 → 重启。 |
 
 ### 4.2 平台边界与跨平台策略
 
 - **壳（shell）与核心（core）**：核心 = 内嵌 Node 后端 + Web GUI + 更新协议 +
   版本方案（全部与 OS 无关）；壳 = 原生窗口/WebView、进程管理、换包重启。仅壳是
   平台相关的，且被刻意保持轻薄。
-- **平台决策集中**：所有平台相关逻辑集中于 `src/Platform.swift`（平台标识、路径
-  默认值），清单平台匹配等**纯逻辑**在 `src/UpdatePolicy.swift`（§8.6 T-1），壳的
-  其余逻辑保持 OS 无关——未来若迁移到跨平台壳（如 Tauri：Rust + 系统 WebView，
-  macOS 用 WKWebView、Windows 用 WebView2），这是唯一需要镜像的扩展点。
+- **平台决策集中**：所有平台相关逻辑集中于 `app/Sources/Platform.swift`（平台标识、
+  路径默认值），清单平台匹配等**纯逻辑**在 `app/Sources/UpdatePolicy.swift`
+  （§8.6 T-1），壳的其余逻辑保持 OS 无关——未来若迁移到跨平台壳（如 Tauri：
+  Rust + 系统 WebView，macOS 用 WKWebView、Windows 用 WebView2），这是唯一需要
+  镜像的扩展点。
 - **协议先行**：更新清单在协议层即区分 `platform`/`arch`/`minOSVersion`；
   Windows 端可实现同一协议并复用下载/校验/清单概念，仅换包机制不同
   （macOS 为 helper 换包重启；Windows 因运行中的 exe 不可覆盖，需 MSIX 原子更新
@@ -133,8 +134,14 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
   行提示到终端执行后用菜单重启）。
 - **FR-1.5** 若 `$DSH_HOME/profiles/desktop` 不存在，应用必须（MUST）从随包模板
   `Contents/Resources/desktop-profile/` 预置该 profile（`package.json`、
-  `cordis.yml`、`cordis.patch.yml`、`pnpm-workspace.yaml`），且不得（MUST NOT）
-  覆盖已存在的用户层。
+  `cordis.yml`、`cordis.patch.yml`、`pnpm-workspace.yaml`，以及随模板打包的
+  编译后插件 `plugins/*/`），且不得（MUST NOT）覆盖已存在的用户层。对**已存在**
+  的 profile，应用必须（MUST）幂等地同步模板中的桌面自有资产：只补种缺失的
+  `plugins/*` 目录（编译产物 + package.json），绝不覆盖已有内容；当 profile 的
+  `cordis.patch.yml` 仍为**模板默认的空层**（去除注释后有效内容恰为 `[]`）时，
+  应（SHOULD）一次性替换为当前模板（使桌面侧新增的接线——如火山 web_search
+  provider，S-0002——到达既有安装），用户编辑过的补丁层必须（MUST）原样保留。
+  该同步在每次启动执行且可重入（幂等）。
 - **FR-1.6** 启动内嵌后端前，应用必须（MUST）以用户**登录 shell**（依次尝试
   `/bin/zsh -l`、`/bin/bash -l`）探测真实 `PATH` 并注入守护进程环境，使由守护进程
   派生的 bash 工具子进程能直接调用 brew / 用户级命令（如 `gh`）——macOS GUI app 经
@@ -377,13 +384,16 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
    构建不生成图标）。
 2. 打包官方 Node 运行时（`v22.16.0`，darwin-arm64）——仅完整版。
 3. 仅安装 `@deepseek-ai/dsh@0.1.0-rc.6` 的生产依赖——仅完整版。
-4. 编译 Swift（`swiftc -O -target arm64-apple-macos13.0`）。
-5. 编译独立的 `dsh-updater` 助手。
-6. 组装应用包、设置版本（四位：dsh 三位 + 桌面修订，当前 0.1.0.0）、写入清单
+4. 编译桌面插件（`plugins/*`，pnpm workspace）：`pnpm -r --filter './plugins/*' build`
+   （tsc 产出各插件的 `lib/`，ESM JS + .d.ts）；缺 pnpm 时构建失败。
+5. 编译 Swift（`swiftc -O -target arm64-apple-macos13.0`，源码在 `app/Sources/`）。
+6. 编译独立的 `dsh-updater` 助手。
+7. 组装应用包、设置版本（四位：dsh 三位 + 桌面修订，当前 0.1.0.0）、写入清单
    URL、ad-hoc 签名。
-7. 复制 `assets/desktop-profile/` 模板到 `Contents/Resources/desktop-profile/`
-   （首启时预置 `$DSH_HOME/profiles/desktop`，见 FR-1.5）。
-8. 将 `git rev-parse --short HEAD` 写入 `Contents/Info.plist` 的
+8. 复制 `assets/desktop-profile/` 模板到 `Contents/Resources/desktop-profile/`，
+   并把各插件的编译产物（`plugins/<name>/lib/` + `package.json`）拷入
+   `desktop-profile/plugins/<name>/`（首启时随 profile 预置，见 FR-1.5）。
+9. 将 `git rev-parse --short HEAD` 写入 `Contents/Info.plist` 的
    `DSHGitRevision`（非 git 环境回退桌面修订号），供标题栏 `(rev:…)`
    使用（FR-2.2）。
 
@@ -574,32 +584,45 @@ macOS 客户端。它在应用包内嵌 Node 运行时和完整的 `@deepseek-ai
 
 ### A. 仓库布局（受版本控制）
 
+> 布局复刻 `dsk-poc` 的工程规范（根 `package.json` + `pnpm-workspace.yaml` +
+> `plugins/` + `scripts/` + `docs/`）；Swift 源码集中在 `app/`，插件为 TS 包
+> （`src/` → `lib/`），`assets/` 只放配置与静态文件。
+
 ```
-src/                    Swift 源码
-  AppDelegate.swift       应用生命周期、主菜单、@main 入口
+app/Sources/              Swift 源码（macOS 应用壳）
+  AppDelegate.swift        应用生命周期、主菜单、@main 入口
   MainWindowController.swift  WKWebView 窗口、恢复视图、心跳监控
-  EditingWebView.swift     编辑命令路由进 Web 内容
-  ServerManager.swift      内嵌服务器启动/停止/端口探测
-  UpdateManager.swift      自动更新编排
-  UpdatePolicy.swift       更新纯逻辑（版本比较 / skip/pending 键 / manifest 适配，T-1）
+  EditingWebView.swift      编辑命令路由进 Web 内容
+  ServerManager.swift       内嵌服务器启动/停止/端口探测 + desktop profile 预置同步
+  UpdateManager.swift       自动更新编排
+  UpdatePolicy.swift        更新纯逻辑（版本比较 / skip/pending 键 / manifest 适配，T-1）
   Platform.swift            平台抽象（标识/路径默认值）
-  UpdaterHelper.swift      独立换包助手
-  Info.plist               bundle 元数据
+  UpdaterHelper.swift       独立换包助手
+plugins/                  桌面 Cordis 插件（pnpm workspace，TS → lib，dsk-poc 规范）
+  volcano-search/          火山方舟 web_search provider（S-0002）
+    src/*.ts                 插件源码（index.ts + parser.ts）
+    tests/*.test.ts          vitest 单测（parser）
+    package.json             "type":"module" + exports → lib
+    tsconfig.json / tsconfig.typecheck.json / vitest.config.ts
 scripts/                  构建/发布/安装脚本与辅助脚本
-  build.sh                构建 .app（自包含 / light 变体）
+  build.sh                构建 .app（自包含 / light 变体；编译插件 → 随模板打包）
   make-dmg.sh             打包 .dmg
   publish-update.sh       构建 + 打包 + 生成/发布更新清单
   install.sh              一键安装
   dev-update.sh           本地开发更新（file:// 清单）
-  run-tests.sh            UpdatePolicy 单元测试运行器（T-2/T-5）
+  run-tests.sh            Swift UpdatePolicy + 插件 vitest 测试运行器
   smoke-check.sh          产物级校验（T-4，full/light）
   install-hooks.sh        安装 pre-commit 钩子
-  hooks/pre-commit        规格先行强制钩子
+  hooks/pre-commit        规格先行强制钩子（CODE_PATHS 含 app/、plugins/、assets/…）
 tests/                    单元测试（UpdatePolicyTests，T-2/T-5）
-assets/
-  AppIcon.icns            应用图标（静态资产，取自参考图内圈鲸鱼图形，NFR-9）
-  desktop-profile/        桌面 profile 模板（package.json / cordis.yml / cordis.patch.yml / pnpm-workspace.yaml）
-docs/specs/               spec 文档（本文件为 S-0001）
+assets/                   只放配置与静态文件
+  AppIcon.icns            应用图标（静态资产，NFR-9）
+  Info.plist              bundle 元数据（配置）
+  desktop-profile/        桌面 profile 模板（纯配置：package.json / cordis.yml / cordis.patch.yml / pnpm-workspace.yaml）
+package.json              pnpm workspace 根（scripts: build / test / typecheck）
+pnpm-workspace.yaml       workspace 定义（plugins/*，nodeLinker: hoisted）
+tsconfig.base.json        TS 基础配置（NodeNext、strict、.ts 扩展名导入）
+docs/specs/               spec 文档（S-0001 / S-0002）
 docs/app.png              截图
 ```
 
@@ -621,13 +644,13 @@ Window        最小化（⌘M）关闭（⌘W）
 
 | 需求 | 实现位置 |
 |---|---|
-| FR-1.x | `ServerManager.swift` |
-| FR-2.x | `MainWindowController.swift` |
-| FR-3.x、FR-4.x | `MainWindowController.swift`、`ServerManager.swift` |
-| FR-5.x | `AppDelegate.swift`、`EditingWebView.swift` |
-| FR-6.x、FR-7.x | `MainWindowController.swift` |
-| FR-8.x | `ServerManager.swift`、`AppDelegate.swift`、`UpdaterHelper.swift` |
-| FR-9.x | `UpdateManager.swift`、`UpdatePolicy.swift`、`UpdaterHelper.swift`、`AppDelegate.swift` |
-| T-1、T-2、T-5 | `UpdatePolicy.swift`、`tests/UpdatePolicyTests.swift`、`scripts/run-tests.sh` |
+| FR-1.x | `app/Sources/ServerManager.swift` |
+| FR-2.x | `app/Sources/MainWindowController.swift` |
+| FR-3.x、FR-4.x | `app/Sources/MainWindowController.swift`、`app/Sources/ServerManager.swift` |
+| FR-5.x | `app/Sources/AppDelegate.swift`、`app/Sources/EditingWebView.swift` |
+| FR-6.x、FR-7.x | `app/Sources/MainWindowController.swift` |
+| FR-8.x | `app/Sources/ServerManager.swift`、`app/Sources/AppDelegate.swift`、`app/Sources/UpdaterHelper.swift` |
+| FR-9.x | `app/Sources/UpdateManager.swift`、`app/Sources/UpdatePolicy.swift`、`app/Sources/UpdaterHelper.swift`、`app/Sources/AppDelegate.swift` |
+| T-1、T-2、T-5 | `app/Sources/UpdatePolicy.swift`、`tests/UpdatePolicyTests.swift`、`scripts/run-tests.sh` |
 | T-4 | `.github/workflows/build.yml`、`scripts/smoke-check.sh` |
 | 构建/发布 | `scripts/build.sh`、`scripts/make-dmg.sh`、`scripts/publish-update.sh` |

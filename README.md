@@ -57,6 +57,10 @@ touches the upstream `web` profile or the `@deepseek-ai/dsh-web-app` plugin.
   (see [Auto-update](#auto-update))
 - 📜 Logs: `~/Library/Logs/dsh-desktop-app.log`, `~/Library/Logs/dsh-desktop-server.log`
 - 🧩 Reuses your existing `~/.dsh` profile/settings/sessions (honours `DSH_HOME`)
+- 🌐 **Web search works out of the box**: the model-side `web_search` tool is
+  backed by a built-in [Volcano Ark](https://www.volcengine.com/docs/82379/1756990)
+  provider (`volcano-ark`) that reuses your existing Volcano API key — no
+  `DEEPSEEK_API_KEY` needed (see [Desktop web search](#desktop-web-search))
 
 ## Install
 
@@ -155,6 +159,29 @@ URL on the next check (spec S-0001 FR-9.11) — no manual cleanup needed.
 > Gatekeeper won't block the relaunch. For public distribution, sign with a
 > Developer ID and notarize.
 
+## Desktop web search
+
+The desktop profile ships a built-in search provider that lets the agent's
+`web_search` tool run on a **Volcano Ark** (火山方舟) API key instead of
+`DEEPSEEK_API_KEY` (spec [S-0002](docs/specs/0002-web-search-via-volcano-api.md),
+plugin `plugins/volcano-search`).
+
+- **How it works**: the provider calls Ark's Responses API
+  (`POST https://ark.cn-beijing.volces.com/api/v3/responses`) declaring the
+  `web_search` tool; the model decides the keywords and returns a synthesized
+  answer with cited `url_citation` sources.
+- **Key resolution** (first match wins): literal `apiKey` config → env
+  `ARK_API_KEY` → your existing credentials service entry (default
+  `VOLC_2_API_KEY`, i.e. the same key as the default model provider) →
+  `$DSH_HOME/config/volcano.json` → `WEB_PROVIDER_CREDENTIAL_MISSING`.
+- **Activation**: the Ark **联网内容插件** (Web Search plugin) must be enabled
+  for your account once — see
+  `https://console.volcengine.com/common-buy/CC_content_plugin`. Until then the
+  tool returns a clear `WEB_PROVIDER_NOT_OPEN` hint.
+- **Config**: override model/endpoint/limits through the profile's
+  `cordis.patch.yml` (`web-search-volcano` row) or env (`ARK_MODEL`,
+  `ARK_BASE_URL`).
+
 ## Development
 
 > **Spec-first（规格先行）**：本仓库强约定——任何代码修改**先更新 spec 再改
@@ -163,36 +190,46 @@ URL on the next check (spec S-0001 FR-9.11) — no manual cleanup needed.
 > 代码却没改 spec"时拦截提交；安装钩子：`./scripts/install-hooks.sh`。
 
 ```bash
-./scripts/build.sh          # download Node + install dsh deps + compile → dist/*.app
+pnpm install                # install the plugin workspace (plugins/*)
+./scripts/build.sh          # download Node + install dsh deps + compile plugins + Swift → dist/*.app
 ./scripts/make-dmg.sh       # package a .dmg
 ./scripts/install.sh        # install + launch
 ./scripts/publish-update.sh # build + dmg + update manifest (+ --release to publish)
-./scripts/run-tests.sh      # compile + run the UpdatePolicy unit tests
+pnpm -r --filter './plugins/*' build   # build plugins only (tsc → lib/)
+./scripts/run-tests.sh      # Swift UpdatePolicy + plugin vitest tests
 ./scripts/smoke-check.sh    # product-level checks on dist/*.app + manifest (full|light)
 ```
 
 ### Project layout
 
 ```
-src/                    Swift sources
-  AppDelegate.swift       app lifecycle, main menu, @main entry
-  MainWindowController.swift  WKWebView window, recovery view, heartbeat monitor
-  ServerManager.swift     starts the EMBEDDED server, parses its port, lifecycle
-  UpdateManager.swift     auto-update: background check/stage + verify, restart-reminder, apply-on-click
-  UpdatePolicy.swift      pure update logic (version compare / skip & pending keys / manifest matching)
-  UpdaterHelper.swift     standalone dsh-updater (swaps bundle + relaunches)
-  Info.plist              bundle metadata
-tests/                   unit tests (UpdatePolicyTests — spec S-0001 §8.6)
-scripts/                 build/dev/publish/install shell scripts + helpers
-  build.sh                 bundles Node + dsh deps, compiles, assembles .app
-  make-dmg.sh              builds the one-click .dmg
-  publish-update.sh        builds + emits update manifest (+ GitHub release with --release)
-  install.sh               one-click installer
-  dev-update.sh            local dev update: build + DMG + file:// manifest
-  run-tests.sh             compile + run the UpdatePolicy unit tests
-  smoke-check.sh           product-level checks on dist/*.app + manifest (full|light)
-docs/                    spec docs (specs/README.md convention + NNNN-*.md) + screenshot (app.png)
-dist/                    output: .app, .dmg and update-manifest.json (gitignored)
+app/Sources/               Swift sources (macOS shell)
+  AppDelegate.swift          app lifecycle, main menu, @main entry
+  MainWindowController.swift WKWebView window, recovery view, heartbeat monitor
+  ServerManager.swift        starts the embedded server, parses its port, seeds/syncs the desktop profile
+  UpdateManager.swift        auto-update: background check/stage + verify, restart-reminder, apply-on-click
+  UpdatePolicy.swift         pure update logic (version compare / skip & pending keys / manifest matching)
+  UpdaterHelper.swift        standalone dsh-updater (swaps bundle + relaunches)
+plugins/                   desktop Cordis plugins (pnpm workspace, TS → lib)
+  volcano-search/            Volcano Ark web_search provider (S-0002)
+tests/                     unit tests (UpdatePolicyTests — spec S-0001 §8.6)
+scripts/                   build/dev/publish/install shell scripts + helpers
+  build.sh                  bundles Node + dsh deps, compiles plugins + Swift, assembles .app
+  make-dmg.sh               builds the one-click .dmg
+  publish-update.sh         builds + emits update manifest (+ GitHub release with --release)
+  install.sh                one-click installer
+  dev-update.sh             local dev update: build + DMG + file:// manifest
+  run-tests.sh              Swift UpdatePolicy + plugin vitest tests
+  smoke-check.sh            product-level checks on dist/*.app + manifest (full|light)
+assets/                    config & static files only
+  AppIcon.icns              app icon
+  Info.plist                bundle metadata
+  desktop-profile/          desktop profile template (config only: package.json / cordis.yml / cordis.patch.yml / pnpm-workspace.yaml)
+package.json               pnpm workspace root
+pnpm-workspace.yaml        workspace definition (plugins/*, nodeLinker: hoisted)
+tsconfig.base.json         shared TS base config (NodeNext, strict)
+docs/                      spec docs (specs/README.md convention + NNNN-*.md) + screenshot (app.png)
+dist/                      output: .app, .dmg and update-manifest.json (gitignored)
 ```
 
 ### Specification

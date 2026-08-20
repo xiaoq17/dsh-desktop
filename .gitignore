@@ -2,7 +2,6 @@
 .DS_Store
 .AppleDouble
 *.swp
-*.lock
 Icon?
 ._*
 Desktop.ini
@@ -12,9 +11,21 @@ build/
 dist/
 *.dmg
 
-# Node
+# Node — workspace dependencies and plugin build outputs (tsc lib emit)
+# (mirrors dsk-poc: lib/ is compiled and never committed; pnpm-lock.yaml IS
+# committed so installs are reproducible)
 node_modules/
+lib/
+**/lib/
+*.tsbuildinfo
+coverage/
 npm-debug.log*
+pnpm-debug.log
+
+# Runtime data (agent sessions, sqlite indexes, …)
+.data/
+settings.yaml
+.credentials.yaml
 
 # Editors / IDEs
 .idea/

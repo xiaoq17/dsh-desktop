@@ -1,0 +1,20 @@
+{
+  "name": "dsh-desktop-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "dsh-desktop workspace: the native macOS app (app/) plus its Cordis plugins (plugins/*) shipped through the desktop profile.",
+  "scripts": {
+    "build": "pnpm -r --filter './plugins/*' build",
+    "build:plugins": "pnpm -r --filter './plugins/*' build",
+    "test": "pnpm -r --filter './plugins/*' test",
+    "test:plugins": "pnpm -r --filter './plugins/*' test",
+    "typecheck": "pnpm -r --filter './plugins/*' typecheck",
+    "clean": "pnpm -r --filter './plugins/*' clean"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

@@ -19,7 +19,7 @@ REPO="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 [ -n "$REPO" ] || exit 0
 
 # Paths that are "code" and therefore require a spec update when changed.
-CODE_PATHS=( '^src/' '^assets/' '^scripts/' '^\.github/' )
+CODE_PATHS=( '^app/' '^plugins/' '^assets/' '^scripts/' '^\.github/' )
 
 changed_code=0
 code_files=()

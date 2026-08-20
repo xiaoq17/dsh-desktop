@@ -11,6 +11,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **桌面内置联网搜索**（spec [S-0002](docs/specs/0002-web-search-via-volcano-api.md)）：
+  新增 TypeScript 插件 `plugins/volcano-search`，通过 `ctx.web` seam 注册
+  `volcano-ark` 搜索 provider，使模型侧 `web_search` 工具在桌面版可用且不再依赖
+  `DEEPSEEK_API_KEY`——复用用户既有的火山引擎（方舟）API Key 调用
+  `POST /api/v3/responses`（声明 `web_search` 工具）：
+  - 密钥解析优先级：字面量 `apiKey` → 环境 `ARK_API_KEY` → 凭据服务
+    `VOLC_2_API_KEY`（默认，与默认模型 provider 共用）→
+    `$DSH_HOME/config/volcano.json` → `WEB_PROVIDER_CREDENTIAL_MISSING`；
+  - 错误映射为稳定 `WebError` 码（鉴权 / **联网插件未开通 `WEB_PROVIDER_NOT_OPEN`**
+    / 模型不支持 / 限流 / 网络），5xx 自动指数退避重试（1s→2s，最多 2 次）；
+  - 纯解析逻辑（`parser.ts`）vitest 单测覆盖；随 pnpm workspace 构建
+    （`src/` → `lib/`，dsk-poc 工程规范）。
+- **桌面 profile 预置同步**（spec S-0001 FR-1.5 修订）：`ServerManager` 每次启动
+  幂等地把随包模板中的 `plugins/*`（编译产物）同步进
+  `$DSH_HOME/profiles/desktop/`（只补缺失、不覆盖用户内容）；对仍为模板默认空
+  层的 `cordis.patch.yml` 做一次性迁移，使既有安装自动获得新接线（如火山
+  web_search provider）。
+
 ### Fixed
 
 - **更新弹窗文案匹配变体**（spec S-0001 FR-9.14）：`UpdateManager` 的用户可见
@@ -52,6 +72,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **仓库工程规范重构**（spec S-0001 附录 A）：Swift 源码自 `src/` 迁至
+  `app/Sources/`（沿用 `swiftc` 构建，无 Xcode 工程），`Info.plist` 归入
+  `assets/`（assets 只放配置与静态文件），插件代码入 `plugins/`（pnpm workspace +
+  vitest，复刻 dsk-poc 规范）；`assets/desktop-profile/` 改为纯配置模板，编译后
+  插件由 `build.sh` 拷入随包模板。脚本/CI/钩子的路径引用同步更新
+  （`scripts/build.sh`、`scripts/run-tests.sh`、`.github/workflows/build.yml`、
+  `scripts/hooks/pre-commit`）。
 - **spec 合并：S-0002 并入 S-0001**（docs）：脚本目录整理（scripts/ 归置与
   `gen-icon.swift` 移除）决策并入 S-0001 §8.7，删除 `0002-scripts-reorg.md` 并从
   spec 索引移除；需求引用统一改指 S-0001 §8.7。
